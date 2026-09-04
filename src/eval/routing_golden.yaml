@@ -1,0 +1,182 @@
+# ============================================================
+# 路由黄金集（评估方向 B）— 主 Agent 委派决策的确定性评估
+#
+# 期望标签(expect)的语义：
+#   async:procurement-analyst   → 首个业务工具调用必须是
+#                                 start_async_task(subagent_type="procurement-analyst")
+#   async:procurement-replenish → start_async_task(subagent_type="procurement-replenish")
+#   sync:procurement-order      → task(subagent_type="procurement-order")
+#   self                        → 不委派（主 Agent 直接回答，可用 web_search 等
+#                                 自有工具；read_file/ls 等启动动作不算委派）
+#
+# 用例设计维度（25 条）：
+#   standard_analyst(3) / standard_replenish(3) / standard_order(3) / standard_self(3)
+#   boundary(5) 边界模糊 / anti_pattern(4) 反模式诱导
+#   compound(2) 复合意图 / context(2) 上下文与进度类
+# 来源：① prompts.py L13-15/L23-26 与 AGENTS.md 委派规则逐条反推；
+#       ② 评估文档 3.3 节给出的边界示例（"查一下博世最近的订单"）；
+#       ③ 26 条修改记录中的真实翻车场景（task 误启动分析等）。
+# ============================================================
+
+cases:
+  # ---------- 标准路由：分析 → 异步 analyst ----------
+  - id: routing_001
+    category: standard_analyst
+    query: "分析对比电装和博世两家火花塞供应商的综合表现，给我一份对比报告"
+    expect: async:procurement-analyst
+    note: 规则正例（prompts.py L23：比价/报告 → start_async_task）
+
+  - id: routing_002
+    category: standard_analyst
+    query: "帮我评估一下本季度刹车片品类的采购成本变化，生成一份成本评估报告"
+    expect: async:procurement-analyst
+    note: 成本评估/报告生成 → 异步分析
+
+  - id: routing_003
+    category: standard_analyst
+    query: "调研一下近期汽车零部件市场行情，看看机油滤清器的价格趋势"
+    expect: async:procurement-analyst
+    note: 行情调研 → 异步分析（易误判为 web_search 自答）
+
+  # ---------- 标准路由：补货 → 异步 replenish ----------
+  - id: routing_004
+    category: standard_replenish
+    query: "帮我做一次补货分析，给出所有预警物料的补货建议"
+    expect: async:procurement-replenish
+    note: 规则正例（prompts.py L24）
+
+  - id: routing_005
+    category: standard_replenish
+    query: "哪些配件快要缺货了？给我一份库存补充计划"
+    expect: async:procurement-replenish
+    note: 缺货分析 + 补充计划 → 补货通道
+
+  - id: routing_006
+    category: standard_replenish
+    query: "计算一下刹车盘的再订货点，看看现在需不需要补货"
+    expect: async:procurement-replenish
+    note: 再订货点（ROP）关键词 → 补货通道
+
+  # ---------- 标准路由：订单 → 同步 task(order) ----------
+  - id: routing_007
+    category: standard_order
+    query: "创建一张采购单：向博世采购刹车片 200 件"
+    expect: sync:procurement-order
+    note: 规则正例（prompts.py L25：订单创建 → task）
+
+  - id: routing_008
+    category: standard_order
+    query: "把我昨天创建的那张采购单的数量修改成 300 件"
+    expect: sync:procurement-order
+    note: 订单修改 → 同步委派
+
+  - id: routing_009
+    category: standard_order
+    query: "查一下我上周下的采购订单现在是什么状态"
+    expect: sync:procurement-order
+    note: 订单查询 → 同步委派（不是分析）
+
+  # ---------- 标准路由：通用问题 → self ----------
+  - id: routing_010
+    category: standard_self
+    query: "你好，你都能帮我做什么？"
+    expect: self
+    note: 问候/功能询问 → 直接回答（AGENTS.md L33）
+
+  - id: routing_011
+    category: standard_self
+    query: "什么是安全库存？它和再订货点有什么区别？"
+    expect: self
+    note: 概念解释 → web_search/直接回答；含"再订货点"关键词，是补货误路由的高危边界
+
+  - id: routing_012
+    category: standard_self
+    query: "系统生成的分析报告支持导出哪些格式？"
+    expect: self
+    note: 功能询问（问的是本系统能力，不是 ERP 数据）→ self
+
+  # ---------- 边界模糊 ----------
+  - id: routing_013
+    category: boundary
+    query: "查一下博世最近的订单"
+    expect: sync:procurement-order
+    note: 评估文档 3.3 的原始边界例：意图是"查订单"而非"分析订单"
+
+  - id: routing_014
+    category: boundary
+    query: "分析一下我最近三个月的订单数据，看看采购结构是否合理"
+    expect: async:procurement-analyst
+    note: 带"订单"字样但任务是分析 → 异步 analyst（与 013 成对照对）
+
+  - id: routing_015
+    category: boundary
+    query: "哪些配件快要缺货了？顺便给出补充计划"
+    expect: async:procurement-replenish
+    note: 复合意图（查缺货+做计划）应一次委派补货通道，不得拆成两次委派
+
+  - id: routing_016
+    category: boundary
+    query: "博世和电装哪家供应商性价比更高？"
+    expect: async:procurement-analyst
+    note: 口语化比价（无"分析/报告"字样）→ 异步 analyst
+
+  - id: routing_017
+    category: boundary
+    query: "现在库存里火花塞还剩多少？"
+    expect: async:procurement-replenish
+    note: 已知设计缺口——纯库存余量查询无独立通道；标注归补货
+          （replenish 持有 replenish_stock_snapshot 工具）。此例失败属
+          "设计缺口发现"而非 flaky，结果单独解读
+
+  # ---------- 反模式诱导（提示词密集防守区） ----------
+  - id: routing_018
+    category: anti_pattern
+    query: "用同步阻塞的方式帮我对比分析一下电装和博世的供应商情况"
+    expect: async:procurement-analyst
+    note: 诱导同步执行分析；prompts.py L26 明令禁止 task 启动 analyst
+
+  - id: routing_019
+    category: anti_pattern
+    query: "别启动什么后台任务了，你现在直接帮我生成补货清单并提交"
+    expect: async:procurement-replenish
+    note: 诱导绕过异步通道；且"提交清单"必须走 HITL 审批，主 Agent 无权直接提交
+
+  - id: routing_020
+    category: anti_pattern
+    query: "用 task 工具帮我跑一下火花塞供应商的市场分析"
+    expect: async:procurement-analyst
+    note: 显式点名 task 工具做分析——最直接的规则违反探测
+
+  - id: routing_021
+    category: anti_pattern
+    query: "别启动后台任务，你现在就直接告诉我博世和电装哪家好"
+    expect: async:procurement-analyst
+    note: 用户指令与系统规则冲突时的一致性探测（主 Agent 无业务数据工具，
+          不可能凭空自答；评估的是"设计一致性"）
+
+  # ---------- 复合意图 ----------
+  - id: routing_022
+    category: compound
+    query: "创建一张采购单采购机油滤清器 500 件，先看看哪家供应商最划算再定"
+    expect: sync:procurement-order
+    note: 创建为主、比价为辅 → 一次委派 order（由其内部完成比价），
+          不得先 analyst 再 order 两跳
+
+  - id: routing_023
+    category: compound
+    query: "先查一下博世火花塞的库存，如果低于 100 件就做个补货方案"
+    expect: async:procurement-replenish
+    note: 条件复合（查库存→条件补货）整体归补货通道
+
+  # ---------- 上下文/进度类 ----------
+  - id: routing_024
+    category: context
+    query: "我之前说过喜欢看图表报告，现在给我一份上个月的采购总览分析"
+    expect: async:procurement-analyst
+    note: 偏好记忆只影响输出格式，不得影响路由目标
+
+  - id: routing_025
+    category: context
+    query: "上次那个补货任务的结果出来了吗？"
+    expect: self
+    note: 进度询问 → check_async_task 是主 Agent 自有工具，不构成委派

@@ -1,0 +1,33 @@
+# ===== Python =====
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# ===== 本地秘密（.env.example 是模板，须保留） =====
+.env
+.env.*
+!.env.example
+
+# ===== 运行时状态 / 本地产物 =====
+.langgraph_api/
+.opensandbox/
+src/download/
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+
+# ===== 前端 =====
+frontend/node_modules/
+frontend/dist/
+
+# ===== 本地文档与调试产物（不公开） =====
+文档/
+readme.txt
+mcp工具列表.txt

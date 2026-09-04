@@ -1,0 +1,129 @@
+# Copyright 2025 Alibaba Group Holding Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Example Docker Runtime Configuration for OpenSandbox Server
+#
+# 完整配置参考：https://github.com/opensandbox-group/OpenSandbox/blob/main/server/configuration.md
+#
+# =====================================================================
+# 【本文件是什么】OpenSandbox 沙箱服务端（opensandbox-server）的启动配置文件，TOML 格式。
+# 启动方式：& ".venv\Scripts\opensandbox-server.exe" --config .sandbox.toml
+# 它控制：服务端监听地址/端口、沙箱镜像来源、Docker 容器安全加固、
+#         端口映射范围、出入网管控、元数据存储位置等全部行为。
+# 服务端读它 → 按需通过 Docker 创建/销毁真正的沙箱容器（execd / code-interpreter）。
+# =====================================================================
+
+[server]                                 # ===== 服务端（控制面）网络与全局限制 =====
+host = "127.0.0.1"                       # 服务端监听地址：仅本机可访问（安全默认值）。
+                                         # 改为 "0.0.0.0" 则局域网内其他机器也能连此沙箱服务（有暴露风险）
+port = 8080                              # 服务端监听端口：与.env中SANDBOX_DOMAIN=http://127.0.0.1:8080对应，
+                                         # Agent 代码（global_sandbox_manager.py）就通过这个地址连接服务端
+max_sandbox_timeout_seconds = 86400      # 创建沙箱时允许指定的最大存活时长上限（秒）：86400 = 24 小时。
+                                         # 调用方创建沙箱时传的 timeout 参数（=沙箱 TTL）不能超过此值（本项目传
+                                         # 23 小时，见 global_sandbox_manager.py _create_sandbox；曾为 10 分钟，
+                                         # 导致沙箱每 10 分钟过期、下一请求报 404 后重建，已加长）；
+                                         # 从配置中删除该项则不设上限
+
+# 可选：取消注释以启用 API Key 认证
+# api_key = "your-secret-api-key"
+# 若 api_key 为空，启动时需要显式确认：
+# - 交互式 TTY：按提示输入 YES
+# - 非交互环境：设置 OPENSANDBOX_INSECURE_SERVER=YES
+# （本项目未配置 api_key，所以启动命令前要设 $env:OPENSANDBOX_INSECURE_SERVER='YES'，
+#   即自己承认"未认证模式"，任何能访问 127.0.0.1:8080 的进程都可管理沙箱——本机调试可接受）
+
+[log]                                       # ===== 日志配置 =====
+level = "INFO"                              # 日志级别：INFO 输出常规运行事件（沙箱创建/销毁/健康检查）；
+                                            # 排查沙箱启动问题时可临时改为 "DEBUG" 看更细的日志
+
+[runtime]                                   # ===== 沙箱运行时（执行面用什么载体、什么镜像） =====
+type = "docker"                             # 沙箱载体：docker = 由本机 Docker Desktop 创建/销毁沙箱容器。
+                                            # （另一可选值为 kubernetes，生产集群用）
+execd_image = "sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/execd:v1.0.21"
+                                            # 默认沙箱镜像：execd 轻量执行镜像（几百 MB，启动快），
+                                            # 来自阿里云容器镜像仓库。
+                                            # 注意：本项目代码（global_sandbox_manager.py）创建沙箱时显式指定了
+                                            # 更重的 code-interpreter 镜像（13.6GB，含 Python/多语言内核），
+                                            # 此配置是"调用方未指定镜像时"的兜底值
+
+[storage]                                   # ===== 宿主机目录挂载与存储策略 =====
+allowed_host_paths = []                     # 允许挂载进沙箱的宿主机目录白名单：空 = 完全禁止挂载，
+                                            # 沙箱无法直接读写宿主机文件（隔离性最强；如需向沙箱传文件
+                                            # 走服务端 API 上传，而非目录挂载）
+
+# 自动创建 Kubernetes PVC 时的默认存储大小（当调用方未指定时使用）。
+volume_default_size = "1Gi"                 # 仅 Kubernetes 运行时（type="kubernetes"）生效；
+                                            # 当前 Docker 模式下无实际作用，仅保留兼容
+
+[store]                                     # ===== 服务端自身元数据存储（记录沙箱清单） =====
+type = "sqlite"                             # 元数据存储类型：sqlite（单文件数据库，零依赖，适合本地开发）
+path = "./.opensandbox/opensandbox.db"      # 数据库文件路径（相对启动时的工作目录）。
+                                            # 记录内容：沙箱 ID、状态、元数据、过期时间等，
+                                            # OpenSandbox 重启后凭它恢复/清扫历史沙箱。
+                                            # 原值 "~/.opensandbox/opensandbox.db"（用户主目录），因 Windows 下
+                                            # 主目录 SQLite WAL 文件写入被拦截导致启动崩溃，改为项目目录内
+                                            # （详见 文档/修改记录.md 第 9 条）
+
+[docker]                                    # ===== 沙箱容器的 Docker 安全加固（防沙箱内进程越权） =====
+# Supported values for network_mode: "host", "bridge"
+network_mode = "bridge"                     # 沙箱容器网络模式：bridge = 每个沙箱一个独立桥接网络，
+                                            # 通过"宿主机端口映射"暴露沙箱端口（见下方 port_range）。
+                                            # Windows Docker Desktop 必须用 bridge：容器实际跑在 WSL2 虚拟机里，
+                                            # host 模式行为不可预期。当前代理访问依赖 .venv 中 networking.py
+                                            # 的 Windows 补丁（修改记录第 10 条）——重装 opensandbox-server 会丢
+# Bridge 模式下沙箱端口映射的宿主机端口范围。
+# 每个沙箱需要 2–3 个宿主机端口（无 egress 需要 2 个，有 egress sidecar 需要 3 个）。
+# 可根据防火墙策略缩小范围 — 例如 100 个并发沙箱 ≈ 需要 300 个端口。
+port_range_min = 40000                      # 端口映射范围下限：40000
+port_range_max = 60000                      # 上限：60000。可用端口 2 万个 ≈ 支持 6000+ 并发沙箱
+                                            # （校验规则：范围必须 ≥100 且 min < max，否则启动报错）
+# Drop dangerous capabilities and block privilege escalation
+drop_capabilities = ["AUDIT_WRITE", "MKNOD", "NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SYS_MODULE", "SYS_PTRACE", "SYS_TIME", "SYS_TTY_CONFIG"]
+                                            # 创建沙箱容器时丢弃的 Linux 危险能力（capabilities）：
+                                            #   NET_ADMIN=改网络配置  SYS_ADMIN=挂载文件系统等特权操作
+                                            #   SYS_PTRACE=调试/注入其他进程  MKNOD=创建设备文件
+                                            #   NET_RAW=伪造网络包 等
+                                            # 作用：即使沙箱内代码被攻破，也拿不到这些内核能力去攻击宿主机
+no_new_privileges = true                    # 内核级防提权开关：禁止容器内进程通过 setuid/setgid 文件
+                                            # （如提权到 root）获取新特权
+# Optional: set an AppArmor profile name (e.g., "docker-default") when AppArmor is enabled
+apparmor_profile = ""                       # AppArmor 强制访问控制配置名：空 = 不启用
+                                            # （AppArmor 是 Ubuntu 等 Linux 特性，Windows/macOS 不适用）
+# Limit process count to reduce host impact from fork bombs; set to null to disable
+pids_limit = 4096                           # 单个沙箱容器内的最大进程数：4096。
+                                            # 防 fork 炸弹（恶意代码无限创建进程）耗尽宿主机资源；null = 不限制
+# Seccomp profile: empty string uses Docker default; set to an absolute path for a custom profile
+seccomp_profile = ""                        # Seccomp 系统调用过滤规则：空 = 使用 Docker 默认配置
+                                            # （默认已屏蔽大量高危系统调用，如 reboot、加载内核模块等）
+
+[ingress]                                   # ===== 入站访问方式（外部客户端如何访问沙箱内的 HTTP 服务） =====
+mode = "direct"                             # direct = 客户端直接访问沙箱端口映射（简单，适合本地/单机）。
+                                            # 另一选项 gateway = 所有沙箱流量经统一网关路由（生产环境用，
+                                            # 需要额外的 [ingress.gateway] 配置块：域名、路由策略等）
+
+[egress]                                    # ===== 出站网络管控（沙箱内进程访问外网的流量控制） =====
+image = "sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/egress:v1.1.4"
+                                            # 出网管控 sidecar 镜像：仅当调用方创建沙箱时申请了网络策略
+                                            # （egress 规则）才会随沙箱一起启动，负责拦截/放行出站流量
+mode = "dns"                                # 出网管控实现方式：dns = 通过控制 DNS 解析来限制可访问的域名
+                                            # （另一选项 "dns+nft" = DNS 劫持 + nftables 防火墙双重管控，更严格，
+                                            # 仅 Linux 支持）
+
+# 按访问续期。默认关闭 — 见 server/README_zh.md。
+[renew_intent]                              # ===== 沙箱"按访问自动续期"（保活机制） =====
+enabled = false                             # false = 关闭。开启后：每次有客户端访问沙箱，就自动延长该沙箱
+                                            # 的过期时间，避免"还活跃的沙箱被 TTL 到期清扫误杀"。
+                                            # 开启需要额外配置 Redis（记录续期事件队列），本地开发无需打开
+min_interval_seconds = 60                   # 自动续期的最小触发间隔（秒）：60 秒内多次访问只续期一次，
+                                            # 防止高频访问打爆续期逻辑（仅在 enabled=true 时生效）

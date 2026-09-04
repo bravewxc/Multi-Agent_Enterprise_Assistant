@@ -1,0 +1,712 @@
+{
+  "meta": {
+    "golden": "src\\eval\\routing_golden.yaml",
+    "runs": 1,
+    "accuracy": 92.0,
+    "passed": 23,
+    "total": 25,
+    "elapsed_s": 1588,
+    "api": "http://127.0.0.1:8090/api/chat/stream",
+    "generated_at": "2026-08-31T20:06:42.635638"
+  },
+  "cases": [
+    {
+      "id": "routing_001",
+      "category": "standard_analyst",
+      "query": "分析对比电装和博世两家火花塞供应商的综合表现，给我一份对比报告",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_001-r1-08e4d1",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_002",
+      "category": "standard_analyst",
+      "query": "帮我评估一下本季度刹车片品类的采购成本变化，生成一份成本评估报告",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_002-r1-47d261",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_003",
+      "category": "standard_analyst",
+      "query": "调研一下近期汽车零部件市场行情，看看机油滤清器的价格趋势",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_003-r1-2962d9",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_004",
+      "category": "standard_replenish",
+      "query": "帮我做一次补货分析，给出所有预警物料的补货建议",
+      "expect": "async:procurement-replenish",
+      "vote": "async:procurement-replenish",
+      "votes": {
+        "async:procurement-replenish": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_004-r1-7b794c",
+          "actual": "async:procurement-replenish",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_005",
+      "category": "standard_replenish",
+      "query": "哪些配件快要缺货了？给我一份库存补充计划",
+      "expect": "async:procurement-replenish",
+      "vote": "async:procurement-replenish",
+      "votes": {
+        "async:procurement-replenish": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_005-r1-19e992",
+          "actual": "async:procurement-replenish",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_006",
+      "category": "standard_replenish",
+      "query": "计算一下刹车盘的再订货点，看看现在需不需要补货",
+      "expect": "async:procurement-replenish",
+      "vote": "async:procurement-replenish",
+      "votes": {
+        "async:procurement-replenish": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_006-r1-1865a0",
+          "actual": "async:procurement-replenish",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_007",
+      "category": "standard_order",
+      "query": "创建一张采购单：向博世采购刹车片 200 件",
+      "expect": "sync:procurement-order",
+      "vote": "sync:procurement-order",
+      "votes": {
+        "sync:procurement-order": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_007-r1-594e8c",
+          "actual": "sync:procurement-order",
+          "ended_by": "interrupted",
+          "tools": [
+            "read_file",
+            "task",
+            "write_todos",
+            "request_order_info",
+            "order_search_details",
+            "web_search",
+            "write_todos",
+            "write_todos",
+            "order_create"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_008",
+      "category": "standard_order",
+      "query": "把我昨天创建的那张采购单的数量修改成 300 件",
+      "expect": "sync:procurement-order",
+      "vote": "sync:procurement-order",
+      "votes": {
+        "sync:procurement-order": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_008-r1-6ac776",
+          "actual": "sync:procurement-order",
+          "ended_by": "interrupted",
+          "tools": [
+            "read_file",
+            "task",
+            "write_todos",
+            "order_search_details",
+            "read_file",
+            "execute",
+            "order_search_details",
+            "order_search_details",
+            "write_todos",
+            "order_update"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_009",
+      "category": "standard_order",
+      "query": "查一下我上周下的采购订单现在是什么状态",
+      "expect": "sync:procurement-order",
+      "vote": "sync:procurement-order",
+      "votes": {
+        "sync:procurement-order": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_009-r1-385a5a",
+          "actual": "sync:procurement-order",
+          "ended_by": "done",
+          "tools": [
+            "task",
+            "order_search_details",
+            "execute",
+            "order_search_details"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_010",
+      "category": "standard_self",
+      "query": "你好，你都能帮我做什么？",
+      "expect": "self",
+      "vote": "self",
+      "votes": {
+        "self": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_010-r1-905c62",
+          "actual": "self",
+          "ended_by": "done",
+          "tools": [
+            "read_file"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_011",
+      "category": "standard_self",
+      "query": "什么是安全库存？它和再订货点有什么区别？",
+      "expect": "self",
+      "vote": "self",
+      "votes": {
+        "self": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_011-r1-964dee",
+          "actual": "self",
+          "ended_by": "done",
+          "tools": [
+            "read_file"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_012",
+      "category": "standard_self",
+      "query": "系统生成的分析报告支持导出哪些格式？",
+      "expect": "self",
+      "vote": "self",
+      "votes": {
+        "self": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_012-r1-834ea8",
+          "actual": "self",
+          "ended_by": "done",
+          "tools": [
+            "read_file"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_013",
+      "category": "boundary",
+      "query": "查一下博世最近的订单",
+      "expect": "sync:procurement-order",
+      "vote": "sync:procurement-order",
+      "votes": {
+        "sync:procurement-order": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_013-r1-b7c60d",
+          "actual": "sync:procurement-order",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "task",
+            "write_todos",
+            "order_search_details",
+            "grep",
+            "grep",
+            "grep",
+            "execute",
+            "execute",
+            "execute",
+            "execute",
+            "execute",
+            "ls",
+            "execute",
+            "execute",
+            "execute",
+            "execute",
+            "write_todos"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_014",
+      "category": "boundary",
+      "query": "分析一下我最近三个月的订单数据，看看采购结构是否合理",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_014-r1-ea671a",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_015",
+      "category": "boundary",
+      "query": "哪些配件快要缺货了？顺便给出补充计划",
+      "expect": "async:procurement-replenish",
+      "vote": "async:procurement-replenish",
+      "votes": {
+        "async:procurement-replenish": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_015-r1-c14eaf",
+          "actual": "async:procurement-replenish",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_016",
+      "category": "boundary",
+      "query": "博世和电装哪家供应商性价比更高？",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_016-r1-c81384",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_017",
+      "category": "boundary",
+      "query": "现在库存里火花塞还剩多少？",
+      "expect": "async:procurement-replenish",
+      "vote": "async:procurement-replenish",
+      "votes": {
+        "async:procurement-replenish": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_017-r1-1a734b",
+          "actual": "async:procurement-replenish",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "ls",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_018",
+      "category": "anti_pattern",
+      "query": "用同步阻塞的方式帮我对比分析一下电装和博世的供应商情况",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_018-r1-914636",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_019",
+      "category": "anti_pattern",
+      "query": "别启动什么后台任务了，你现在直接帮我生成补货清单并提交",
+      "expect": "async:procurement-replenish",
+      "vote": "async:procurement-replenish",
+      "votes": {
+        "async:procurement-replenish": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_019-r1-50c681",
+          "actual": "async:procurement-replenish",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_020",
+      "category": "anti_pattern",
+      "query": "用 task 工具帮我跑一下火花塞供应商的市场分析",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_020-r1-7b45e4",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_021",
+      "category": "anti_pattern",
+      "query": "别启动后台任务，你现在就直接告诉我博世和电装哪家好",
+      "expect": "async:procurement-analyst",
+      "vote": "self",
+      "votes": {
+        "self": 1
+      },
+      "confidence": "1/1",
+      "pass": false,
+      "error_type": "no_delegation",
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_021-r1-460d41",
+          "actual": "self",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_022",
+      "category": "compound",
+      "query": "创建一张采购单采购机油滤清器 500 件，先看看哪家供应商最划算再定",
+      "expect": "sync:procurement-order",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": false,
+      "error_type": "mis_async_for_sync",
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_022-r1-ff20a3",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_023",
+      "category": "compound",
+      "query": "先查一下博世火花塞的库存，如果低于 100 件就做个补货方案",
+      "expect": "async:procurement-replenish",
+      "vote": "async:procurement-replenish",
+      "votes": {
+        "async:procurement-replenish": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_023-r1-9966e3",
+          "actual": "async:procurement-replenish",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "ls",
+            "ls",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_024",
+      "category": "context",
+      "query": "我之前说过喜欢看图表报告，现在给我一份上个月的采购总览分析",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_024-r1-84d200",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_025",
+      "category": "context",
+      "query": "上次那个补货任务的结果出来了吗？",
+      "expect": "self",
+      "vote": "self",
+      "votes": {
+        "self": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_025-r1-aeae96",
+          "actual": "self",
+          "ended_by": "done",
+          "tools": [
+            "list_async_tasks"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    }
+  ]
+}

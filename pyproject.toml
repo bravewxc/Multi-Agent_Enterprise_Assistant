@@ -1,0 +1,23 @@
+[project]
+name = "erp-harness-agent"
+version = "0.0.1"
+description = "ERP procurement DeepAgent application."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "langgraph>=1.0.0",
+    "python-dotenv>=1.0.1",
+]
+
+[build-system]
+requires = ["setuptools>=73.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["agent", "mcp_server", "api_view", "eval"]
+
+[tool.setuptools.package-dir]
+"agent" = "src/agent"
+"mcp_server" = "src/mcp_server"
+"api_view" = "src/api_view"
+"eval" = "src/eval"

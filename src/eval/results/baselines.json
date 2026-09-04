@@ -1,0 +1,19 @@
+{
+  "_comment": "评估基线（方向F门控依据）。每次改提示词/换模型后重跑评估层，准确率跌破基线-5pp即回归。历史：2026-08-31 首批基线路由 88.0（两次采样84/92均值）、Judge 5.0（DeepSeek降级同构评审）；2026-09-02 提示词整改后路由 100.0（25/25 全过）、Judge 7.5（glm-5.2 异构评审，非降级）。",
+  "routing_accuracy": 100.0,
+  "routing_runs": [84.0, 92.0, 100.0],
+  "routing_golden": "src/eval/routing_golden.yaml (25 cases, runs=1)",
+  "routing_history": {
+    "2026-08-31_baseline": 88.0,
+    "2026-09-02_after_fix": 100.0,
+    "fix": "prompts.py/main_agent.py/AGENTS.md 路由决策纪律（用户唱反调仍须委派、复合意图以主动作定路由、比价必走analyst）+ 启动后防轮询纪律"
+  },
+  "judge_llm_avg": 7.5,
+  "judge_degraded": false,
+  "judge_model": "glm-5.2",
+  "judge_history": {
+    "2026-08-31_baseline": {"score": 5.0, "degraded": true, "note": "Qwen 403 降级 DeepSeek 同构"},
+    "2026-09-02_after_fix": {"score": 7.5, "degraded": false, "note": "glm-5.2 异构评审；确定性5/5；reason 量化率 2/17→17/17"}
+  },
+  "created_at": "2026-09-02T22:52:00+08:00"
+}

@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "source": "sandbox:/analysis/approved_replenishment_20260902_223712.json",
+    "judge_model": "glm-5.2",
+    "judge_degraded": false,
+    "llm_pass_line": 6,
+    "generated_at": "2026-09-02T22:51:35.663006",
+    "overall_pass": true,
+    "llm_avg": 7.5
+  },
+  "report_head": {
+    "item_count": 17,
+    "total_amount": 97763.04
+  },
+  "criteria": [
+    {
+      "criterion": "plan_nonempty",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "17 项"
+    },
+    {
+      "criterion": "fields_complete",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "核心字段齐全"
+    },
+    {
+      "criterion": "item_arithmetic",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "17 项全部 单价×数量=金额"
+    },
+    {
+      "criterion": "total_consistency",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "Σ明细=97763.04 vs 报告总额=97763.04"
+    },
+    {
+      "criterion": "count_consistency",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "item_count=17 vs len(plan)=17"
+    },
+    {
+      "criterion": "urgency_ordering",
+      "type": "llm",
+      "pass": true,
+      "score": 8,
+      "rationale": "后刹车片4.2天耗尽标critical、侧支架26.7天标medium合理；碗公仅1件、离合线仅2件标low，虽耗尽天数较长(73.2/52.2天)但绝对库存极低，存在单点断供风险未反映在urgency中。整体分级与量化依据基本一致，个别低库存条目风险考量略欠。",
+      "judge_model": "glm-5.2"
+    },
+    {
+      "criterion": "actionability",
+      "type": "llm",
+      "pass": true,
+      "score": 7,
+      "rationale": "多数条目如“后刹车片(BC5002)”含量化依据（库存、ROP、月耗、建议量由来），符合7-8分标准。但“方向柱(FC3004)”等5项单价为0且需商务复核，且全清单均无供应商/交期等执行要素，无法直接下单，故评7分。",
+      "judge_model": "glm-5.2"
+    }
+  ]
+}

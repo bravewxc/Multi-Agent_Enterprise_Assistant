@@ -1,0 +1,99 @@
+{
+  "meta": {
+    "golden": "src\\eval\\routing_golden.yaml",
+    "runs": 1,
+    "accuracy": 100.0,
+    "passed": 3,
+    "total": 3,
+    "elapsed_s": 144,
+    "api": "http://127.0.0.1:8090/api/chat/stream",
+    "generated_at": "2026-08-31T19:17:34.636358"
+  },
+  "cases": [
+    {
+      "id": "routing_001",
+      "category": "standard_analyst",
+      "query": "分析对比电装和博世两家火花塞供应商的综合表现，给我一份对比报告",
+      "expect": "async:procurement-analyst",
+      "vote": "async:procurement-analyst",
+      "votes": {
+        "async:procurement-analyst": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_001-r1-6eeb60",
+          "actual": "async:procurement-analyst",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls",
+            "start_async_task"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_010",
+      "category": "standard_self",
+      "query": "你好，你都能帮我做什么？",
+      "expect": "self",
+      "vote": "self",
+      "votes": {
+        "self": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_010-r1-83c605",
+          "actual": "self",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "ls"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    },
+    {
+      "id": "routing_013",
+      "category": "boundary",
+      "query": "查一下博世最近的订单",
+      "expect": "sync:procurement-order",
+      "vote": "sync:procurement-order",
+      "votes": {
+        "sync:procurement-order": 1
+      },
+      "confidence": "1/1",
+      "pass": true,
+      "error_type": null,
+      "runs": [
+        {
+          "run": 1,
+          "thread_id": "eval-b-routing_013-r1-4c28de",
+          "actual": "sync:procurement-order",
+          "ended_by": "done",
+          "tools": [
+            "read_file",
+            "task",
+            "order_search_details",
+            "grep",
+            "execute",
+            "execute",
+            "execute",
+            "compact_conversation"
+          ],
+          "answer_head": "【系统上下文】\n当前用户 user_id: laoxiao\n当前用户 username: laoxiao\n用户偏好文件路径: /memories/laoxiao/preferences.md\n\n请首先使用 read_file 读取上述偏好文件了解用户偏好。\n（recent_suppliers 和 recent_queries 由系统自动维护，你无需手动更新）[系统通知] 以下技能包已更新：\n- m"
+        }
+      ]
+    }
+  ]
+}

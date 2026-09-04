@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "source": "sandbox:/analysis/approved_replenishment_20260903_185943.json",
+    "judge_model": "glm-5.2",
+    "judge_degraded": false,
+    "llm_pass_line": 6,
+    "generated_at": "2026-09-03T19:01:11.537207",
+    "overall_pass": true,
+    "llm_avg": 8.5
+  },
+  "report_head": {
+    "item_count": 3,
+    "total_amount": 32904.04
+  },
+  "criteria": [
+    {
+      "criterion": "plan_nonempty",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "3 项"
+    },
+    {
+      "criterion": "fields_complete",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "核心字段齐全"
+    },
+    {
+      "criterion": "item_arithmetic",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "3 项全部 单价×数量=金额"
+    },
+    {
+      "criterion": "total_consistency",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "Σ明细=32904.04 vs 报告总额=32904.04"
+    },
+    {
+      "criterion": "count_consistency",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "item_count=3 vs len(plan)=3"
+    },
+    {
+      "criterion": "urgency_ordering",
+      "type": "llm",
+      "pass": true,
+      "score": 9,
+      "rationale": "“后刹车片”预计4.2天耗尽标为critical，“刹车手柄”约75.9天耗尽与“离合线”约52.2天耗尽均标为low。各条目urgency分级与reason中“预计耗尽天数”的量化依据完全一致，逻辑自洽，符合9-10分标准。",
+      "judge_model": "glm-5.2"
+    },
+    {
+      "criterion": "actionability",
+      "type": "llm",
+      "pass": true,
+      "score": 8,
+      "rationale": "清单中“后刹车片”“刹车手柄”“离合线”的 reason 均含量化依据，如当前库存、日耗、再订货点及缺口，并说明了建议补货量的计算逻辑（如“依据：ROP补齐取整”），符合 7-8 分标准。但缺少供应商、交期等执行要素，未达 9-10 分。",
+      "judge_model": "glm-5.2"
+    }
+  ]
+}

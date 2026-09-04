@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "source": "sandbox:/analysis/approved_replenishment_20260831_211450.json",
+    "judge_model": "qwen3.7-max-2026-06-08",
+    "llm_pass_line": 6,
+    "generated_at": "2026-08-31T21:27:06.210523",
+    "overall_pass": false,
+    "llm_avg": 0.0
+  },
+  "report_head": {
+    "item_count": 17,
+    "total_amount": 97763.04
+  },
+  "criteria": [
+    {
+      "criterion": "plan_nonempty",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "17 项"
+    },
+    {
+      "criterion": "fields_complete",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "核心字段齐全"
+    },
+    {
+      "criterion": "item_arithmetic",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "17 项全部 单价×数量=金额"
+    },
+    {
+      "criterion": "total_consistency",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "Σ明细=97763.04 vs 报告总额=97763.04"
+    },
+    {
+      "criterion": "count_consistency",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "item_count=17 vs len(plan)=17"
+    },
+    {
+      "criterion": "urgency_ordering",
+      "type": "llm",
+      "pass": false,
+      "score": 0,
+      "rationale": "Judge 输出解析失败（重试后仍无效）",
+      "judge_model": "qwen3.7-max-2026-06-08"
+    },
+    {
+      "criterion": "actionability",
+      "type": "llm",
+      "pass": false,
+      "score": 0,
+      "rationale": "Judge 输出解析失败（重试后仍无效）",
+      "judge_model": "qwen3.7-max-2026-06-08"
+    }
+  ]
+}

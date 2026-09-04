@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "source": "sandbox:/analysis/approved_replenishment_20260831_211450.json",
+    "judge_model": "deepseek-v4-flash",
+    "judge_degraded": true,
+    "llm_pass_line": 6,
+    "generated_at": "2026-08-31T21:30:05.588272",
+    "overall_pass": false,
+    "llm_avg": 5.0
+  },
+  "report_head": {
+    "item_count": 17,
+    "total_amount": 97763.04
+  },
+  "criteria": [
+    {
+      "criterion": "plan_nonempty",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "17 项"
+    },
+    {
+      "criterion": "fields_complete",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "核心字段齐全"
+    },
+    {
+      "criterion": "item_arithmetic",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "17 项全部 单价×数量=金额"
+    },
+    {
+      "criterion": "total_consistency",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "Σ明细=97763.04 vs 报告总额=97763.04"
+    },
+    {
+      "criterion": "count_consistency",
+      "type": "deterministic",
+      "pass": true,
+      "score": 1,
+      "detail": "item_count=17 vs len(plan)=17"
+    },
+    {
+      "criterion": "urgency_ordering",
+      "type": "llm",
+      "pass": false,
+      "score": 5,
+      "rationale": "多数条目low与“低于再订货点”相符，后刹车片critical、侧支架medium有量化依据；但离合线“缺罐较大”仍标low，碗公“补量较大”也标low，分级与描述强度不一致，故未达完全一致。",
+      "judge_model": "deepseek-v4-flash"
+    },
+    {
+      "criterion": "actionability",
+      "type": "llm",
+      "pass": false,
+      "score": 5,
+      "rationale": "仅后刹车片、侧支架给出天数依据；刹车手柄、整流器等仅提‘低于再订货点’，无当前库存/ROP/建议量来源；方向柱等5项无价格及采购历史，无法直接下单。整体量化不足，执行要素缺失。",
+      "judge_model": "deepseek-v4-flash"
+    }
+  ]
+}
