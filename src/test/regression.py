@@ -1,7 +1,8 @@
 """端到端回归套件（方向 F）：A-E 的容器化整合，"发布前一条命令"。
 
 分层结构与耗时量级：
-  [快] 单元层   ~秒级    _merge_preferences 单测 + 中断摘要解析单测（零依赖零成本）
+  [快] 单元层   ~秒级    _merge_preferences 单测 + 中断摘要解析单测
+                          + 工具描述一致性锁（零依赖零成本）
   [中] 集成层   ~分钟级  HITL 审批链路 6 用例（方向C，需 2024）+
                           MCP 工具断言化回归（改造版 test_all_tools，需 8000/Java ERP）
   [慢] 评估层   ~20分钟  路由准确率 ≥ 基线-5pp（方向B，需 8090 全栈）+
@@ -85,6 +86,36 @@ def layer_unit() -> bool:
     except Exception as e:
         ok = False
         _record({"name": "interrupt 摘要解析单测（方向C）", "pass": False, "detail": str(e)[:200]})
+
+    # 3. 工具描述一致性锁：assign_skill 的 docstring 必须与 SCOPE_MAP 双向一致
+    #    docstring 经 @tool 成为工具描述注入模型上下文——漏一个 key 等于模型
+    #    不知道能给该 Agent 分配技能（2026-09-17 曾漏 procurement-replenish）。
+    #    用源码解析而非 import：agent.config 顶层会初始化 MongoDBSaver（急切建
+    #    索引），MongoDB 未启动时 import 会连接超时——源码解析保住零依赖契约。
+    #    双向：缺 key（模型不可见）与多 key（SCOPE_MAP 已删除的僵尸条目）都拦。
+    try:
+        import re as _re
+        cfg_src = (ROOT / "src" / "agent" / "config.py").read_text(encoding="utf-8")
+        m = _re.search(r"SCOPE_MAP\s*=\s*\{(.*?)\}", cfg_src, _re.DOTALL)
+        assert m, "config.py 中未找到 SCOPE_MAP 定义"
+        scope_keys = set(_re.findall(r'"([^"]+)"\s*:', m.group(1)))
+
+        tool_src = (ROOT / "src" / "agent" / "tools" / "assign_skill.py")\
+            .read_text(encoding="utf-8")
+        # docstring 里 Agent 清单的固定格式：- "xxx" — 说明
+        listed = set(_re.findall(r'-\s*"([^"]+)"\s*—', tool_src))
+        assert listed, "assign_skill.py 未解析到 Agent 清单（docstring 格式是否被改？）"
+
+        missing, stale = scope_keys - listed, listed - scope_keys
+        assert not missing and not stale, (
+            f"assign_skill 工具描述与 SCOPE_MAP 漂移："
+            f"缺少 {sorted(missing) or '无'}，多余 {sorted(stale) or '无'}")
+        _record({"name": "assign_skill 描述覆盖 SCOPE_MAP", "pass": True,
+                 "detail": f"{len(scope_keys)} 个 Agent 双向一致（源码级）"})
+    except Exception as e:
+        ok = False
+        _record({"name": "assign_skill 描述覆盖 SCOPE_MAP", "pass": False,
+                 "detail": str(e)[:200]})
 
     return ok
 
