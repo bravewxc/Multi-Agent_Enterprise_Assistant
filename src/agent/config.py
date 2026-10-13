@@ -4,10 +4,10 @@ from pathlib import Path
 import httpx
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.mongodb import MongoDBSaver
-from langgraph.store.memory import InMemoryStore
 from opensandbox.config import ConnectionConfigSync
 from pymongo import MongoClient
 
+from agent.backends.mongo_store import MongoDBStore
 from agent.env_utils import (
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
     ALIBABA_API_KEY, ALIBABA_BASE_URL,
@@ -107,10 +107,9 @@ SCOPE_MAP = {
 # 连接地址由 .env 的 MONGODB_URI 控制（本地调试默认指向本机 Docker MongoDB）
 MONGODB_DB_NAME = "langchain_db"
 MONGODB_CHECKPOINT_COLLECTION = "checkpoints"
-
-# ---------- 持久化存储 ----------
-# InMemoryStore: 开发阶段使用。生产环境替换为持久 Store。
-STORE = InMemoryStore()
+# Store collection：/memories/ 与 /persisted-skills/ 两条 CompositeBackend
+# 路由的持久化落点（经 MongoDBStore）
+MONGODB_STORE_COLLECTION = "stores"
 
 # MongoDBSaver: Agent 对话状态的 MongoDB 持久化 checkpointer。
 # 支持 Human-in-the-Loop（interrupt 状态持久化）和跨重启对话恢复。
@@ -119,6 +118,16 @@ CHECKPOINTER = MongoDBSaver(
     client=_mongodb_client,
     db_name=MONGODB_DB_NAME,
     checkpoint_collection_name=MONGODB_CHECKPOINT_COLLECTION,
+)
+
+# MongoDBStore: 长期记忆与技能资产的持久化 Store（替换 InMemoryStore——
+# 内存版在后端重启后 /memories/ 与 /persisted-skills/ 数据全丢，见
+# 文档/修改记录.md 2026-10-13 条目）。构造不连库（索引惰性创建），
+# 与 checkpointer 复用同一个 Mongo 实例（client 连接池共享）。
+STORE = MongoDBStore(
+    client=_mongodb_client,
+    db_name=MONGODB_DB_NAME,
+    collection_name=MONGODB_STORE_COLLECTION,
 )
 
 
