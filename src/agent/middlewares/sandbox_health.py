@@ -9,6 +9,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 
 from agent.backends.sandbox_proxy import SandboxBackendProxy
+from agent.middlewares.user_skills_restore import restore_persisted_skills
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class SandboxHealthMiddleware(AgentMiddleware):
             "Global sandbox is unhealthy; triggering automatic recovery. user_id=%s",
             self._user_id,
         )
-        await self._recover()
+        await self._recover(runtime)
         return None
 
     async def _check(self) -> bool:
@@ -55,8 +56,9 @@ class SandboxHealthMiddleware(AgentMiddleware):
         except Exception:
             return False
 
-    async def _recover(self) -> None:
+    async def _recover(self, runtime: Any) -> None:
         from agent.backends.global_sandbox_manager import recreate_global_sandbox
+        from agent.config import SKILLS_STORE_NAMESPACE
 
         recovered = await recreate_global_sandbox()
         if recovered is not self._backend:
@@ -66,4 +68,22 @@ class SandboxHealthMiddleware(AgentMiddleware):
             self._backend.upload_files,
             [("/AGENTS.md", self._agents_md)],
         )
+
+        # 新沙箱创建时会播种内置技能，但用户安装的持久化技能在 Store 中；
+        # 这里立即回灌，避免热替换后要等到下一个 before_agent 才可用。
+        store = getattr(runtime, "store", None)
+        if store is None:
+            logger.warning(
+                "runtime.store unavailable; persisted skills were not restored "
+                "after sandbox recovery"
+            )
+        else:
+            restored = await restore_persisted_skills(
+                store, self._backend, SKILLS_STORE_NAMESPACE
+            )
+            logger.info(
+                "Restored %d persisted skill file(s) after sandbox recovery",
+                restored,
+            )
+
         logger.info("Global sandbox automatic recovery completed")

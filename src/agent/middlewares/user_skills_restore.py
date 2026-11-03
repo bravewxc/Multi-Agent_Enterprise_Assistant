@@ -17,6 +17,53 @@ from typing import Any, Dict, List, Optional, Tuple
 from langchain.agents.middleware import AgentMiddleware
 
 
+async def collect_persisted_skills(store, namespace) -> List[Tuple[str, bytes]]:
+    """从 Store 收集所有持久化技能文件，返回（沙箱路径，内容）列表。
+
+    抽取为模块级函数，供 UserSkillsRestoreMiddleware 和沙箱热替换后的
+    立即恢复共用，避免热替换后用户技能要等到下一个 before_agent 才可用。
+    """
+    files: List[Tuple[str, bytes]] = []
+
+    try:
+        items = await store.asearch(namespace)
+    except Exception:
+        return files
+
+    for item in items:
+        key = str(item.key).lstrip("/")
+
+        # key 格式: {scope}/{skill_name}/...
+        # 映射到: /skills/{scope}/{skill_name}/...
+        parts = key.split("/", 1)
+        if len(parts) != 2:
+            continue
+        scope, rest = parts
+        sandbox_path = f"/skills/{scope}/{rest}"
+
+        content = item.value
+        if isinstance(content, dict):
+            content = content.get("content", "")
+        if isinstance(content, list):
+            content = "\n".join(str(line) for line in content)
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+        if not content:
+            continue
+
+        files.append((sandbox_path, content))
+
+    return files
+
+
+async def restore_persisted_skills(store, backend, namespace) -> int:
+    """把 Store 中的持久化技能上传到沙箱，返回上传文件数。"""
+    files = await collect_persisted_skills(store, namespace)
+    if files:
+        await backend.aupload_files(files)
+    return len(files)
+
+
 class UserSkillsRestoreMiddleware(AgentMiddleware):
     """从 StoreBackend 恢复持久化技能到沙箱的中间件。"""
 
@@ -35,9 +82,7 @@ class UserSkillsRestoreMiddleware(AgentMiddleware):
     ) -> Optional[Dict[str, Any]]:
         """运行前：从 StoreBackend 读取持久化技能，上传到沙箱。"""
         store = runtime.store
-        files = await self._collect_skills(store)
-        if files:
-            await self.backend.aupload_files(files)
+        await restore_persisted_skills(store, self.backend, self.namespace)
         return None
 
     def before_agent(
@@ -45,44 +90,3 @@ class UserSkillsRestoreMiddleware(AgentMiddleware):
     ) -> Optional[Dict[str, Any]]:
         """同步版本：不执行操作（技能恢复仅支持异步）。"""
         return None
-
-    # --------------------- 内部方法 ---------------------
-    async def _collect_skills(self, store) -> List[Tuple[str, bytes]]:
-        """
-        从 StoreBackend 收集所有持久化技能文件。
-
-        StoreBackend key 格式: /{scope}/{skill_name}/...
-        沙箱目标路径: /skills/{scope}/{skill_name}/...
-
-        Returns:
-            (沙箱路径, 文件内容字节) 的列表。
-        """
-        files: List[Tuple[str, bytes]] = []
-
-        try:
-            items = await store.asearch(self.namespace)
-        except Exception:
-            return files
-
-        for item in items:
-            key = str(item.key).lstrip("/")
-
-            # key 格式: {scope}/{skill_name}/...
-            # 映射到: /skills/{scope}/{skill_name}/...
-            parts = key.split("/", 1)
-            if len(parts) != 2:
-                continue
-            scope, rest = parts
-            sandbox_path = f"/skills/{scope}/{rest}"
-
-            content = item.value
-            if isinstance(content, dict):
-                content = content.get("content", "")
-            if isinstance(content, str):
-                content = content.encode("utf-8")
-            if not content:
-                continue
-
-            files.append((sandbox_path, content))
-
-        return files
