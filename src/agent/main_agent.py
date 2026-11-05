@@ -41,6 +41,7 @@ from agent.config import (
     AGENTS_MD_FILENAME,
     CHECKPOINTER,
     DOWNLOAD_DIR,
+    FAST_MODEL,
     LOCAL_AGENTS_MD,
     MAIN_MODEL,
     SKILLS_STORE_NAMESPACE,
@@ -53,6 +54,7 @@ from agent.middlewares.context_injection import ContextInjectionMiddleware
 from agent.middlewares.image_guard import ImageGuardMiddleware
 from agent.middlewares.tool_result_budget import ToolResultBudgetMiddleware
 from agent.middlewares.memory_update import MemoryUpdateMiddleware
+from agent.middlewares.model_tier import ModelTierMiddleware
 from agent.middlewares.retry_guidance import RetryGuidanceMiddleware
 from agent.middlewares.sandbox_breaker import SandboxCircuitBreakerMiddleware
 from agent.middlewares.sandbox_health import SandboxHealthMiddleware
@@ -385,6 +387,9 @@ async def create_main_agent(
         ModelCallLimitMiddleware(run_limit=50),
         # 9. 工具调用限制
         ToolCallLimitMiddleware(run_limit=200),
+        # 10. 模型分级（成本优化）：寒暄/致谢/能力咨询等简单轮次改用
+        #     FAST_MODEL 并去掉工具 schema；业务问题与工具循环仍走主模型
+        ModelTierMiddleware(fast_model=FAST_MODEL),
     ]
 
     # ---- Phase 9: create_deep_agent ----

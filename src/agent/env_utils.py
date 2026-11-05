@@ -27,6 +27,9 @@ DAYTONA_BASE_URL = os.getenv('DAYTONA_BASE_URL')
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL')
 # 摘要模型（DeepSeek 官网）
 SUMMARY_MODEL_NAME = os.getenv('SUMMARY_MODEL')
+# 低成本快模型（成本优化：问候/致谢/能力咨询等简单轮次）。
+# 未配置 FAST_MODEL 时回退到摘要模型，保证行为与未改造前一致。
+FAST_MODEL_NAME = os.getenv('FAST_MODEL') or SUMMARY_MODEL_NAME
 # 备用模型（阿里百炼，主模型故障时兜底）
 FALLBACK_MODEL_NAME = os.getenv('FALLBACK_MODEL')
 # 联网搜索模型（阿里百炼，需支持 enable_search）

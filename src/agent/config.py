@@ -11,7 +11,7 @@ from agent.backends.mongo_store import MongoDBStore
 from agent.env_utils import (
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
     ALIBABA_API_KEY, ALIBABA_BASE_URL,
-    SUMMARY_MODEL_NAME, FALLBACK_MODEL_NAME,
+    SUMMARY_MODEL_NAME, FAST_MODEL_NAME, FALLBACK_MODEL_NAME,
     MONGODB_URI, SANDBOX_DOMAIN,
 )
 
@@ -37,6 +37,21 @@ SUMMARY_MODEL = ChatOpenAI(
     openai_api_key=DEEPSEEK_API_KEY,
     openai_api_base=DEEPSEEK_BASE_URL,
     max_tokens=25600,
+    model_kwargs={
+        "extra_body": {
+            "thinking": {"type": "disabled"}
+        }
+    }
+)
+# 快模型（成本优化）：问候、致谢、能力咨询等简单轮次使用。
+# 与主模型同源（复用 DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL），因此 .env 的
+# FAST_MODEL 只能填 DeepSeek 侧更便宜的模型名；未配置时回退到 SUMMARY_MODEL。
+FAST_MODEL = ChatOpenAI(
+    model=FAST_MODEL_NAME,
+    temperature=0.7,
+    openai_api_key=DEEPSEEK_API_KEY,
+    openai_api_base=DEEPSEEK_BASE_URL,
+    max_tokens=4096,
     model_kwargs={
         "extra_body": {
             "thinking": {"type": "disabled"}
