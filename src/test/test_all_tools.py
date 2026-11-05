@@ -159,6 +159,7 @@ async def test_mcp_order_lifecycle() -> int:
             "order_create", {
                 "order_detail": detail,
                 "order_number": _order_number(),
+                "idempotency_key": f"eval-{_order_number()}",
                 "status": 1,
                 "remark": "[EVAL-FIXED] 回归测试订单（可清理）",
             })), )
@@ -173,6 +174,7 @@ async def test_mcp_order_lifecycle() -> int:
         updated = _assert_ok("order_update", _unwrap(await client.call_tool(
             "order_update", {
                 "order_id": order_id,                    # ★ 只改自建单，不碰既有数据
+                "expected_version": 1,                   # ★ create 成功即登记版本 1
                 "order_number": order_number,
                 "status": 2,
                 "remark": "[EVAL-FIXED] 回归测试订单-已更新",
@@ -244,6 +246,7 @@ async def run_all_agent_client_tests() -> bool:
         payload = _assert_ok("agent:order_create", _unwrap(await tool.ainvoke({
             "order_detail": FIXED["order_detail"],
             "order_number": _order_number(),
+            "idempotency_key": f"eval-agent-{_order_number()}",
             "status": 1,
             "remark": "[EVAL-FIXED] agent_client 回归订单",
         })), expect_nonempty=True)

@@ -18,8 +18,9 @@ description: >
 
 # 工具列表
 tools:
-  - order_create             # 新增采购订单 → POST /orders/create
-  - order_update             # 更新采购订单 → PUT /orders/update/{order_id}
+  - order_create             # 新增采购订单 → POST /orders/create（必须带 idempotency_key）
+  - order_update             # 更新采购订单 → PUT /orders/update/{order_id}（必须带 expected_version）
+  - order_version            # 读取订单当前版本（改单前必须先取）
   - order_search_details     # 搜索订单明细 → GET /orders/search-details
   - web_search               # 网络搜索（智谱搜狗API）
   - request_order_info       # 订单数据补充 → 人工介入补齐缺失字段
@@ -56,6 +57,7 @@ system_prompt: |
   | 字段名 | 类型 | 必填 | 说明 |
   |--------|------|------|------|
   | orderNumber | String | **是** | 订单编号。工具自动生成：PO+年月日(8位)+3位随机数，新增的时候无需传递 |
+  | idempotency_key | String | **是** | 创建请求幂等键。每次新采购意图生成一个 UUID；同一创建请求的重复提交/重试必须复用原键 |
   | orderDetail | Array | **是** | 订单明细列表。每项含 partId/quantity/unitPrice |
   | totalAmount | BigDecimal | 否 | 订单总金额（不传则自动根据明细计算） |
   | status | Integer | 否 | 订单状态（1=待审核,2=已审核,3=采购中,4=已入库,5=已取消），默认1 |
@@ -75,8 +77,9 @@ system_prompt: |
   | subtotal | BigDecimal | 否 | 小计金额（不传自动计算 = quantity × unitPrice） |
   | remark | String | 否 | 明细备注 |
 
-  - `order_create`: **POST** /orders/create
-  - `order_update`: **PUT** /orders/update/{order_id}（仅比 create 多一个路径参数 `order_id`）
+  - `order_create`: **POST** /orders/create（必须带 `idempotency_key`；同一键重复提交不会重复创建）
+  - `order_update`: **PUT** /orders/update/{order_id}（除路径参数 `order_id` 外，必须带 `expected_version`）
+  - `order_version`: 读取订单当前版本号（不写数据）。**改单前必须先调用**，返回值原样作为 `expected_version` 传给 `order_update`
   - `order_search_details`: **GET** /orders/search-details。按零部件名称、日期范围搜索订单明细（含零部件详情和供应商信息），所有参数可选
 
   ### 通用工具
@@ -113,9 +116,14 @@ system_prompt: |
   重复"校验→补充→解析→校验"，直到所有必填字段齐全。
 
   ### 第四步：执行订单操作
-  - 数据完整后，构造请求参数，调用 `order_create` 或 `order_update`
-  - 工具执行前会自动触发**人工最终审批**（需要 approve 同意才会真正执行）
-  - 检查返回结果：成功 → 返回确认信息 / 失败 → 如实汇报
+
+  - **创建订单**：先生成一个 UUID 作为 `idempotency_key`，数据完整后调用 `order_create`。同一创建请求的重试/重复提交必须复用原键；新的采购意图必须换新键。返回 `idempotentReplay=true` 表示服务端拦掉了重复创建，返回的是首次创建的订单
+  - **修改订单**：先调用 `order_version(order_id)` 读取当前版本，再把该版本原样作为 `expected_version` 传给 `order_update`；不允许在没取版本的情况下改单
+  - 工具执行前会自动触发**人工最终审批**（需要 approve 同意才会真正执行）；创建参数里的 `idempotency_key` 防重复下单，修改参数里的 `expected_version` 防覆盖他人的新版本
+  - 检查返回结果：
+    - 成功 → 返回确认信息；修改成功时记下返回的新 `version`
+    - 返回 `code=409 / order_version_conflict` → 订单在你读取之后被别人改过。**不要用原参数重试**：先用 `order_search_details` 重新读取最新数据 → 重新校验 → 重新提交审批（带新的 `expected_version`）
+    - 其他失败 → 如实汇报，最多重试 2 次
 
   ## 订单状态说明
   | 状态码 | 含义 | 说明 |
