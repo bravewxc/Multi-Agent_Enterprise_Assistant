@@ -22,8 +22,10 @@ awrap_tool_call 位于所有工具调用的必经之路，为每次调用记录�
 """
 from __future__ import annotations
 
+import atexit
 import json
 import logging
+import threading
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
@@ -47,6 +49,62 @@ METRICS_COLLECTION_NAME = "tool_call_metrics"
 # 进程级单例：惰性建立，Mongo 不可用时只告警一次
 _metrics_collection: Any = None
 _mongo_unavailable = False
+
+# 指标批量写入缓冲：工具调用热路径只入内存，后台线程批量落库，
+# 避免每次工具调用同步等一次 Mongo insert。
+_BUFFER_MAX = 200
+_FLUSH_INTERVAL_SECONDS = 1.0
+_pending_docs: list[dict] = []
+_pending_lock = threading.Lock()
+_flush_thread: threading.Thread | None = None
+_flush_stop = threading.Event()
+
+
+def _flush_metrics() -> None:
+    """把缓冲区中的指标一次性写入 Mongo；失败丢弃本批，不阻塞工具调用。"""
+    with _pending_lock:
+        if not _pending_docs:
+            return
+        batch = _pending_docs[:]
+        _pending_docs.clear()
+
+    col = _get_collection()
+    if col is None:
+        return
+    try:
+        col.insert_many(batch, ordered=False)
+    except Exception:
+        logger.debug("tool_metrics: 批量写入失败（丢弃本批，不影响工具调用）", exc_info=True)
+
+
+def _flush_loop() -> None:
+    while not _flush_stop.wait(_FLUSH_INTERVAL_SECONDS):
+        _flush_metrics()
+
+
+def _ensure_flush_thread() -> None:
+    global _flush_thread
+    if _flush_thread is not None and _flush_thread.is_alive():
+        return
+    _flush_stop.clear()
+    _flush_thread = threading.Thread(
+        target=_flush_loop,
+        name="tool-metrics-flush",
+        daemon=True,
+    )
+    _flush_thread.start()
+
+
+def _enqueue_metric(doc: dict) -> None:
+    with _pending_lock:
+        _pending_docs.append(doc)
+        need_flush = len(_pending_docs) >= _BUFFER_MAX
+    _ensure_flush_thread()
+    if need_flush:
+        _flush_metrics()
+
+
+atexit.register(_flush_metrics)
 
 
 def _get_collection() -> Any:
@@ -117,11 +175,9 @@ class ToolMetricsMiddleware(AgentMiddleware):
             "error_msg": redact_secrets(error_msg or "")[:200],
         }
         try:
-            col = _get_collection()
-            if col is not None:
-                col.insert_one(doc)
+            _enqueue_metric(doc)
         except Exception:
-            logger.debug("tool_metrics: 写入失败（不影响工具调用）", exc_info=True)
+            logger.debug("tool_metrics: 入队失败（不影响工具调用）", exc_info=True)
         # 结构化日志行：即使 Mongo 挂了，grep "TOOL_METRICS" 仍可离线统计
         logger.info(
             "TOOL_METRICS tool=%s ok=%s %sms err=%s thread=%s",

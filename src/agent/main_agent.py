@@ -51,10 +51,12 @@ from agent.memory.prompts import system_prompt
 from agent.middleware_config import create_order_middleware
 from agent.middlewares.context_injection import ContextInjectionMiddleware
 from agent.middlewares.image_guard import ImageGuardMiddleware
+from agent.middlewares.tool_result_budget import ToolResultBudgetMiddleware
 from agent.middlewares.memory_update import MemoryUpdateMiddleware
 from agent.middlewares.retry_guidance import RetryGuidanceMiddleware
 from agent.middlewares.sandbox_breaker import SandboxCircuitBreakerMiddleware
 from agent.middlewares.sandbox_health import SandboxHealthMiddleware
+from agent.middlewares.sandbox_lifecycle import SandboxLifecycleMiddleware
 from agent.middlewares.skills_sync import SkillsSyncMiddleware
 from agent.middlewares.tool_error import ToolErrorMiddleware
 from agent.middlewares.tool_metrics import ToolMetricsMiddleware
@@ -357,13 +359,17 @@ async def create_main_agent(
         # 0d. 图片内容防护（修复方向C坑3）：工具返回的 image content 替换为
         #     文字说明，防止纯文本模型被 400 击穿（详见 image_guard.py）
         ImageGuardMiddleware(),
+        # 0e. 工具结果预算：超大结果落沙箱文件，上下文只留摘要+分页指引
+        ToolResultBudgetMiddleware(backend=sandbox_backend),
         # 1. 沙箱健康守护：每次 agent step 前 ping → 失败自动恢复
         SandboxHealthMiddleware(
             sandbox_backend=sandbox_backend,
             user_id=user_id,
             agents_md_content=ag_md_content.encode("utf-8"),
         ),
-        # 2. 用户上下文注入
+        # 2. 沙箱临时目录生命周期：过期清理 + 配额检查（10 分钟节流）
+        SandboxLifecycleMiddleware(backend=sandbox_backend),
+        # 3. 用户上下文注入
         ContextInjectionMiddleware(),
         # 3. 技能同步（本地 → 沙箱）
         SkillsSyncMiddleware(sandbox_backend),

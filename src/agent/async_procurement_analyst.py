@@ -17,6 +17,7 @@ from agent.middlewares.image_guard import ImageGuardMiddleware
 from agent.middlewares.retry_guidance import RetryGuidanceMiddleware
 from agent.middlewares.tool_error import ToolErrorMiddleware
 from agent.middlewares.tool_metrics import ToolMetricsMiddleware
+from agent.middlewares.tool_result_budget import ToolResultBudgetMiddleware
 from agent.env_utils import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from agent.tools.chart_generator import create_generate_chart_tool
 from agent.tools.mcp_client import (
@@ -108,6 +109,7 @@ agent = create_deep_agent(  # 创建了一个Agent
         RetryGuidanceMiddleware(),
         ToolErrorMiddleware(),
         ImageGuardMiddleware(),
+        ToolResultBudgetMiddleware(backend_provider=get_global_sandbox_sync),
     ],
     backend=_backend_factory,
     checkpointer=None,

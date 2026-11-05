@@ -27,6 +27,7 @@ from api_view.web_config import (
 from agent.main_agent import create_main_agent, precompute_agent_context, PrecomputedContext
 from agent.backends import global_sandbox_manager
 from agent.config import CHECKPOINTER
+from api_view.graph_cache import AgentGraphCache
 
 
 # CheckpointTuple 到 StateSnapshot 的轻量适配器
@@ -53,6 +54,8 @@ class AgentLoader:
     _precomputed: PrecomputedContext = None
     # 最近创建的 agent graph（用于状态查询；所有 graph 共享同一 checkpointer）
     _agent = None
+    # per-user graph 缓存：TTL + LRU，避免每请求重复建图
+    _graph_cache = AgentGraphCache(ttl_seconds=600.0, max_entries=100)
 
     def __new__(cls):
         if cls._instance is None:
@@ -107,11 +110,15 @@ class AgentLoader:
         sandbox_backend = await global_sandbox_manager.ensure_global_sandbox()
         config = self.create_config(user_id=user_id)
         config["configurable"]["user_id"] = user_id
-        agent_graph = await create_main_agent(
-            config,
-            sandbox_backend=sandbox_backend,
-            precomputed=self._precomputed,
-        )
+
+        async def _build_graph():
+            return await create_main_agent(
+                config,
+                sandbox_backend=sandbox_backend,
+                precomputed=self._precomputed,
+            )
+
+        agent_graph = await self._graph_cache.get_or_create(user_id, _build_graph)
         # 保存引用用于状态查询（所有 graph 共享同一 checkpointer）
         self._agent = agent_graph
         return agent_graph
@@ -130,6 +137,7 @@ class AgentLoader:
         self._initialized = False
         self._precomputed = None
         self._agent = None
+        await self._graph_cache.invalidate()
 
     @property
     def agent(self):
