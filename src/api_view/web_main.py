@@ -4,6 +4,7 @@ DeepAgent Chat API - FastAPI 主应用
 提供基于 DeepAgent 的 AI 对话系统后端 API
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from api_view.web_config import API_TITLE, API_VERSION, API_DESCRIPTION
 from api_view.api import async_tasks, chat, history
 from api_view.agent_loader import agent_loader
+from api_view.recovery import recovery_loop
+from agent.recovery_store import recovery_store
 
 
 @asynccontextmanager
@@ -31,6 +34,9 @@ async def lifespan(app: FastAPI):
     # 初始化 Agent
     await agent_loader.initialize()
 
+    # 启动后扫描 running/recovering 记录，从 Mongo 检查点恢复崩溃前任务
+    recovery_task = asyncio.create_task(recovery_loop(), name="run-recovery")
+
     print("=" * 50)
     print("DeepAgent Chat API 启动成功!")
     print("=" * 50)
@@ -45,7 +51,10 @@ async def lifespan(app: FastAPI):
     print("正在关闭 DeepAgent Chat API...")
     print("=" * 50)
 
-    # 清理所有沙箱 + MongoDB 连接
+    # 先停止恢复循环，再清理所有沙箱 + MongoDB 连接
+    recovery_task.cancel()
+    await asyncio.gather(recovery_task, return_exceptions=True)
+    recovery_store.close()
     await agent_loader.shutdown()
 
     print("DeepAgent Chat API 已关闭")

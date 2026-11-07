@@ -23,6 +23,11 @@ from agent.schema import (
     Message,
 )
 from api_view.agent_loader import agent_loader
+from agent.recovery_store import (
+    acquire_main_thread,
+    recovery_store,
+    release_main_thread,
+)
 
 
 # 创建路由
@@ -250,30 +255,49 @@ async def stream_chat_response(
     thread_id: str = None,
     resume_data: dict = None,
     user_id: str = "laoxiao",
+    recovery: bool = False,
 ) -> AsyncIterator[str]:
     """
     流式生成对话响应，支持 Human-in-the-Loop 中断与恢复。
 
-    两种调用模式：
+    三种调用模式：
     1. 初始对话 — 传入 message（用户消息）
     2. 中断恢复 — 传入 resume_data（Command.resume 的值）
+    3. 崩溃恢复 — recovery=True，input=None，从最后 checkpoint 续跑
 
     当 Agent 触发中断时（request_order_info 数据补充 / order_create|update HITL 审批），
     流会发送 interrupt 事件后结束。前端收集用户决策后通过 /resume 端点恢复。
 
     同时累积完整的展示消息列表（包含子代理消息），在流结束后存入 MongoDB。
     """
+    if not recovery:
+        await recovery_store.register_main(thread_id, user_id)
+
     context = {"user_id": user_id, "username": user_id}
     config = agent_loader.create_config(thread_id, user_id=user_id)
 
     # 获取该用户的 per-user agent graph（沙箱缓存 + 预计算组件）
-    agent_graph = await agent_loader.get_agent_for_user(user_id)
+    try:
+        agent_graph = await agent_loader.get_agent_for_user(user_id)
+    except Exception as e:
+        if recovery:
+            await recovery_store.schedule_retry("main", thread_id, str(e))
+        else:
+            await recovery_store.mark("main", thread_id, "failed", error=str(e))
+        yield create_sse_message({"type": "error", "message": str(e)})
+        return
     collected_content = ""
     # 工具调用栈，支持嵌套工具调用（主代理调 task → 子代理调 generate_chart）
     tool_call_stack = []
 
     # ---- 根据模式构建 input 和 display_messages ----
-    if resume_data is not None:
+    if recovery:
+        # 崩溃恢复不能重放原 message/resume，否则用户消息和审批决定会重复；
+        # input=None 让 LangGraph 从最后 checkpoint 的 pending writes 继续。
+        existing = await agent_loader.get_display_messages(thread_id) or []
+        display_messages = existing
+        current_input = None
+    elif resume_data is not None:
         # 恢复模式：加载已有展示消息，用 Command(resume=...) 恢复
         existing = await agent_loader.get_display_messages(thread_id) or []
         display_messages = existing
@@ -374,6 +398,7 @@ async def stream_chat_response(
                 # 保存部分展示消息到 MongoDB（中断前的消息状态），便于中断后恢复
                 # 注意：resume 模式下 display_messages 已含历史，保存时会覆盖旧记录
                 await agent_loader.save_display_messages(thread_id, remain)
+                await recovery_store.mark("main", thread_id, "interrupted")
                 write_debug_log(debug_log, "SAVE_DISPLAY_INTERRUPT", {
                     "thread_id": thread_id,
                     "message_count": len(remain),
@@ -560,14 +585,15 @@ async def stream_chat_response(
 
         # 保存完整展示消息到 MongoDB（包含子代理消息）
         # 多轮对话：追加到已有消息，而非覆盖（每轮调用 save 时 display_messages 仅含当前轮）
-        if resume_data is None:
+        if resume_data is None and not recovery:
             # 初始对话：追加到已有历史
             existing = await agent_loader.get_display_messages(thread_id) or []
             all_messages = existing + display_messages
         else:
-            # resume 模式：display_messages 已包含历史（load 时获取），直接保存
+            # resume / 崩溃恢复：display_messages 已包含历史，直接保存
             all_messages = display_messages
         await agent_loader.save_display_messages(thread_id, all_messages)
+        await recovery_store.mark("main", thread_id, "succeeded")
         write_debug_log(debug_log, "SAVE_DISPLAY", {
             "thread_id": thread_id,
             "total_count": len(all_messages)
@@ -587,10 +613,42 @@ async def stream_chat_response(
 
     except Exception as e:
         write_debug_log(debug_log, "STREAM_ERROR", {"error": str(e)})
+        if recovery:
+            await recovery_store.schedule_retry("main", thread_id, str(e))
+        else:
+            await recovery_store.mark("main", thread_id, "failed", error=str(e))
         yield create_sse_message({
             "type": "error",
             "message": str(e)
         })
+
+
+async def guarded_stream_chat_response(
+    message: str = None,
+    thread_id: str = None,
+    resume_data: dict = None,
+    user_id: str = "laoxiao",
+    recovery: bool = False,
+) -> AsyncIterator[str]:
+    """同一进程内同一 thread 只允许一个执行者，覆盖正常与恢复请求。"""
+    acquired = await acquire_main_thread(thread_id)
+    if not acquired:
+        yield create_sse_message({
+            "type": "error",
+            "message": "该会话正在执行或恢复中，请稍后查询结果，不要重复提交。",
+        })
+        return
+    try:
+        async for chunk in stream_chat_response(
+            message=message,
+            thread_id=thread_id,
+            resume_data=resume_data,
+            user_id=user_id,
+            recovery=recovery,
+        ):
+            yield chunk
+    finally:
+        release_main_thread(thread_id)
 
 
 # ============================================================
@@ -610,7 +668,7 @@ async def chat_stream(request: ChatRequest):
     user_id = request.user_id
 
     return StreamingResponse(
-        stream_chat_response(message=request.message, thread_id=thread_id, user_id=user_id),
+        guarded_stream_chat_response(message=request.message, thread_id=thread_id, user_id=user_id),
         media_type="text/event-stream",  # text/json, text/html, image/jpg
         headers={
             "Cache-Control": "no-cache",
@@ -631,7 +689,7 @@ async def chat_resume(thread_id: str, request: ResumeRequest):
     - HITL 审批: {"decisions": [{"type": "approve"}]} 或 [{"type": "reject"}]
     """
     return StreamingResponse(
-        stream_chat_response(thread_id=thread_id, resume_data=request.resume, user_id=request.user_id),
+        guarded_stream_chat_response(thread_id=thread_id, resume_data=request.resume, user_id=request.user_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -50,6 +50,7 @@ from agent.config import (
 )
 from agent.memory.prompts import system_prompt
 from agent.middleware_config import create_order_middleware
+from agent.middlewares.async_task_recovery import AsyncTaskRecoveryMiddleware
 from agent.middlewares.context_injection import ContextInjectionMiddleware
 from agent.middlewares.image_guard import ImageGuardMiddleware
 from agent.middlewares.tool_result_budget import ToolResultBudgetMiddleware
@@ -363,6 +364,9 @@ async def create_main_agent(
         ImageGuardMiddleware(),
         # 0e. 工具结果预算：超大结果落沙箱文件，上下文只留摘要+分页指引
         ToolResultBudgetMiddleware(backend=sandbox_backend),
+        # 0f. 异步任务恢复登记：start/check 的 task_id/run_id 落 Mongo，
+        #     供 2024 重启后按原任务续跑；旁路记录，不改变工具返回协议
+        AsyncTaskRecoveryMiddleware(),
         # 1. 沙箱健康守护：每次 agent step 前 ping → 失败自动恢复
         SandboxHealthMiddleware(
             sandbox_backend=sandbox_backend,

@@ -5,5 +5,8 @@
     "procurement_analyst_async": "./src/agent/async_procurement_analyst.py:agent",
     "procurement_replenish_async": "./src/agent/async_procurement_replenish.py:agent"
   },
-  "env": ".env"
+  "env": ".env",
+  "checkpointer": {
+    "path": "./src/agent/persistence.py:mongo_checkpointer"
+  }
 }

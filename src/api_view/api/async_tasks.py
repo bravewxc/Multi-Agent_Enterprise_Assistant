@@ -12,6 +12,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from langgraph_sdk import get_client
 
+from agent.recovery_store import recovery_store
+
 
 router = APIRouter()
 
@@ -167,13 +169,30 @@ async def get_async_task_status(task_id: str):
         ) from exc
 
     if not runs:
-        return {
-            "task_id": task_id,
-            "status": "pending",
-            "done": False,
-            "content": "",
-            "error": None,
-        }
+        # 2024 重启后 run 注册表为空：按 Mongo 登记表恢复原任务，再查一次
+        from api_view.recovery import recover_async_task_by_id
+
+        await recover_async_task_by_id(task_id)
+        runs = await client.runs.list(task_id, limit=10)
+
+    if not runs:
+        record = await recovery_store.get("async", task_id)
+        status = str((record or {}).get("status", "pending"))
+        if record and status not in {"running", "recovering"}:
+            # 终态任务用 Mongo 中保存的状态构造最小 run，继续走下方 state 读取
+            runs = [{
+                "status": status,
+                "run_id": record.get("run_id"),
+                "updated_at": record.get("updated_at", ""),
+            }]
+        else:
+            return {
+                "task_id": task_id,
+                "status": "running" if record else "pending",
+                "done": False,
+                "content": "后台服务已恢复，任务正在从最近检查点继续。" if record else "",
+                "error": None,
+            }
 
     latest_run = runs[0]
     status = str(_get_attr(latest_run, "status", "unknown"))

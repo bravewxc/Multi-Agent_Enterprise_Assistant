@@ -14,6 +14,8 @@ import os
 from langchain_core.tools import tool
 from langgraph_sdk import get_client
 
+from agent.recovery_store import recovery_store
+
 logger = logging.getLogger(__name__)
 
 ASYNC_AGENT_PROTOCOL_URL = os.environ.get(
@@ -67,10 +69,20 @@ def create_resume_async_task_tool():
             # 从该 thread 最近一次 run 取 assistant_id（即当初启动的图），
             # 恢复必须用同一个 assistant 发起
             runs = await client.runs.list(task_id, limit=5)
-            if not runs:
-                return f"错误：未找到任务 {task_id} 的运行记录，请核对 task_id。"
-
-            latest = runs[0]
+            if runs:
+                latest = runs[0]
+                assistant_id = latest.get("assistant_id")
+            else:
+                # 2024 重启后内存 run 注册表丢失，但 Mongo 恢复登记仍保存 graph_id
+                record = await recovery_store.get("async", task_id)
+                assistant_id = (record or {}).get("graph_id")
+                if not assistant_id:
+                    return f"错误：未找到任务 {task_id} 的运行记录，请核对 task_id。"
+                await client.threads.create(
+                    thread_id=task_id,
+                    graph_id=assistant_id,
+                    if_exists="do_nothing",
+                )
 
             # 中断判定：本版本 langgraph-api（0.7.90）在图挂起等待审批时
             # run.status 仍为 "success"，真正的中断标志在 thread state 的
@@ -84,13 +96,12 @@ def create_resume_async_task_tool():
                     if isinstance(value, dict) and "action_requests" in value:
                         has_interrupt = True
             if not has_interrupt:
-                status = str(latest.get("status", "unknown"))
+                status = str((runs[0] if runs else {}).get("status", "unknown"))
                 return (
                     f"任务 {task_id} 当前没有等待审批的中断（run 状态 {status}），"
                     f"无需恢复。只有提交了清单等待审批的任务才能 resume。"
                 )
 
-            assistant_id = latest.get("assistant_id")
             # reject + reason：理由经框架 RejectDecision.message 透传给图内模型
             # （langchain HumanInTheLoopMiddleware._process_decision 会把 message
             #   作为拒绝 ToolMessage 的内容返回给模型——协商循环的传令通道）
@@ -101,6 +112,9 @@ def create_resume_async_task_tool():
                 thread_id=task_id,
                 assistant_id=assistant_id,
                 command={"resume": {"decisions": [decision_payload]}},
+            )
+            await recovery_store.mark(
+                "async", task_id, "running", run_id=run.get("run_id")
             )
         except Exception as e:
             logger.warning("Failed to resume async task %s: %s", task_id, e)
