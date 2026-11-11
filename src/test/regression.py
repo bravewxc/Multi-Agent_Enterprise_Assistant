@@ -117,6 +117,23 @@ def layer_unit() -> bool:
         _record({"name": "assign_skill 描述覆盖 SCOPE_MAP", "pass": False,
                  "detail": str(e)[:200]})
 
+    # 4. 质量门禁时序锁：after_model 反向执行（门禁先于 HITL）+ 拦截/放行决策
+    #    框架升级若改变 after_model 顺序，质量门禁会退化成"审批之后才评审"，
+    #    本用例是这条时序契约的唯一自动化保障（离线，不依赖 2024/Mongo/MCP）。
+    try:
+        from test import test_report_quality_gate as trq
+        trq.test_after_model_runs_in_reverse_list_order()
+        trq.test_block_before_approval()
+        trq.test_pass_goes_to_approval()
+        trq.test_rounds_exhausted_goes_to_approval()
+        trq.test_other_tool_ignored()
+        _record({"name": "报告质量门禁时序（生成后/审批前）", "pass": True,
+                 "detail": "反向顺序 + 拦截/放行 5 断言"})
+    except Exception as e:
+        ok = False
+        _record({"name": "报告质量门禁时序（生成后/审批前）", "pass": False,
+                 "detail": str(e)[:200]})
+
     return ok
 
 

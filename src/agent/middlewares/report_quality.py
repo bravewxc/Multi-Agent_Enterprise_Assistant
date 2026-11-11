@@ -4,21 +4,25 @@
     评估方向 D 的 Judge（judge_report.py）此前只存在于离线脚本——补货清单
     审批通过、存档之后，人才能手动跑一次评审。运行时没有任何"这份清单
     合不合格"的自动判断，质量全押在提示词整改的静态效果上。
-    A1 把已校准的评审器（锚点 rubric + 异构模型）搬进运行时：用户 approve
-    之后、清单写入存档之前，中间件自动跑一遍评审，分数落库 + 打日志。
+    A1 把已校准的评审器（锚点 rubric + 异构模型）搬进运行时：清单生成后、
+    展示给用户之前自动跑一遍评审，分数落库 + 打日志。
     A2 在 A1 之上加 Reflexion 重写循环：评审不达标 → 批评意见作为
     status="error" 的 ToolMessage 回流给模型 → 模型修改清单重新提交
-    （再次触发审批中断，用户对修订版再拍板）→ 复评。最多重写 2 轮，
+    （重新过门禁，通过后才进入审批，用户对合格版再拍板）。最多重写 2 轮，
     第 3 次提交无条件放行（附质量备注）——"带着批评意见放行，不阻断交付"。
 
-工作位置（关键时序）：
-    模型调 replenish_submit → HITL 中断（等审批）→ 用户 approve
-    → 工具真正执行（本中间件的 awrap_tool_call 在此刻包住它）
-    → 评审 → A1 记录 / A2 决定放行 or 拦截重写。
+工作位置（关键时序，已改为"生成后、展示前"）：
+    模型调 replenish_submit
+    → 本中间件的 aafter_model 先跑（评审 + A1 记录 + A2 决策）
+    → 不达标：批评以 error ToolMessage 回流、jump_to="model"，模型重写
+    → 达标：放行到 HITL，中断等审批（用户看到的是已过质量门的清单）
+    → 用户 approve → 工具直接执行并落盘（不再二次评审）
+    → 用户 reject  → 不落盘
 
-    注意：HITL 的 interrupt 发生在工具执行之前（after_model 钩子），
-    所以本中间件拿到的必然是"用户已批准"的清单——评审的是终版；
-    A2 拦截后的重写版会再次中断，用户始终拥有最终决定权。
+    实现要点：LangGraph 的 after_model 链按中间件列表**反向**执行，
+    所以本中间件必须排在 HumanInTheLoopMiddleware **之后**（列表更靠后），
+    才能先于审批中断运行；HITL 因此改为在异步图显式挂载，
+    不再通过 create_deep_agent(interrupt_on=...) 由框架追加到末尾。
 
 循环护栏（对应 Loop Engineering 六要素④）：
     - 最多重写 2 轮（_MAX_REWRITES），轮次从 state.messages 里的
@@ -41,13 +45,16 @@
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
+from typing import Any
 
-from langchain.agents.middleware import AgentMiddleware, AgentState
-from langchain_core.messages import ToolMessage
+from langchain.agents.middleware import AgentMiddleware, AgentState, hook_config
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
@@ -59,6 +66,27 @@ _MONGO_COL = None
 # A2：重写循环护栏
 _CRITIQUE_MARKER = "【清单质量评审未通过】"   # 批评 ToolMessage 的固定前缀（轮次计数依据）
 _MAX_REWRITES = 2                            # 最多重写 2 轮，第 3 次提交无条件放行
+
+# 进程内最近一次评审结果：键 (thread_id, plan 指纹)。
+# 只为「审批通过后落盘时补一条质量备注」服务——审批与工具执行之间
+# 若进程重启导致缓存缺失，仅少一条备注，不影响落盘主流程。
+_VERDICT_CACHE: dict[tuple[str, str], dict] = {}
+_VERDICT_CACHE_MAX = 64
+
+
+def _plan_fingerprint(plan: list) -> str:
+    raw = json.dumps(plan, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _cache_verdict(thread_id: str, plan: list, verdict: dict) -> None:
+    _VERDICT_CACHE[(thread_id, _plan_fingerprint(plan))] = verdict
+    while len(_VERDICT_CACHE) > _VERDICT_CACHE_MAX:
+        _VERDICT_CACHE.pop(next(iter(_VERDICT_CACHE)))
+
+
+def _cached_verdict(thread_id: str, plan: list) -> dict | None:
+    return _VERDICT_CACHE.get((thread_id, _plan_fingerprint(plan)))
 
 
 def _get_collection():
@@ -180,8 +208,8 @@ class ReportQualityMiddleware(AgentMiddleware):
                                             "rationale": r["rationale"]}
                            for r in verdict["llm_results"]},
             "pass_line": self.pass_line,
-            # A2 动作: recorded=达标放行 / blocked_rewrite=拦截重写 /
-            #          passed_with_note=轮次耗尽带备注放行
+            # A2 动作: recorded=达标放行到审批 / passed_with_note=轮次耗尽带备注放行 /
+            #          blocked_before_approval=展示前拦截重写
             "action": action,
             "round": round_no,
         }
@@ -265,7 +293,8 @@ class ReportQualityMiddleware(AgentMiddleware):
         lines.append("1. 只修改 replenishment_plan 的内容本身（量化 reason / urgency 分级 /")
         lines.append("   算术一致性 / 缺失字段），保持任务目标不变；")
         lines.append("2. reason 必须含真实数字（当前库存/日耗/ROP/建议量由来）；")
-        lines.append("3. 修改后重新调用 replenish_submit 提交修订版（会再次等待人工审批）。")
+        lines.append("3. 修改后重新调用 replenish_submit 提交修订版——"
+                     "修订版会先重新质量评审，通过后再等待人工审批。")
         lines.append("")
         lines.append("注意：评审标准固定（确定性算术 + 量化依据锚点），")
         lines.append("堆砌无依据的数字或措辞不会提高评分。")
@@ -274,56 +303,111 @@ class ReportQualityMiddleware(AgentMiddleware):
     # ------------------------------------------------------------
     # 钩子
     # ------------------------------------------------------------
+    @staticmethod
+    def _thread_id(runtime: Any) -> str:
+        try:
+            cfg = getattr(runtime, "config", None) or {}
+            tid = (cfg.get("configurable") or {}).get("thread_id")
+            if tid:
+                return str(tid)
+        except Exception:
+            pass
+        return "unknown"
+
+    def _build_note(self, verdict: dict) -> str:
+        """轮次耗尽的清单落盘后追加的质量备注（不阻断交付）。"""
+        return (
+            "\n\n【质量备注】清单已存档，但未达评审及格线"
+            f"（语义 {verdict['llm_avg']}/10，及格线 {self.pass_line}；"
+            f"已重写 {_MAX_REWRITES} 轮）。评审意见见上，"
+            "建议人工复核本清单。"
+        )
+
+    @hook_config(can_jump_to=["model"])
+    async def aafter_model(
+        self, state: Any, runtime: Any
+    ) -> dict[str, Any] | None:
+        """生成后、展示前：评审清单；不达标则批评回流并打回模型重写。
+
+        位置在 HITL 之前（after_model 链反向执行），所以用户看到的
+        永远是已过质量门的清单；通过后 approve 即直接落盘。
+        """
+        messages = state.get("messages", []) if isinstance(state, dict) else []
+        last_ai = next(
+            (m for m in reversed(messages) if isinstance(m, AIMessage)), None
+        )
+        if last_ai is None:
+            return None
+
+        target = next(
+            (tc for tc in (getattr(last_ai, "tool_calls", None) or [])
+             if tc.get("name") == "replenish_submit"),
+            None,
+        )
+        if target is None:
+            return None
+
+        plan = (target.get("args") or {}).get("replenishment_plan") or []
+        if not plan:
+            return None
+
+        thread_id = self._thread_id(runtime)
+        round_no = self._count_rewrite_rounds(state) + 1
+
+        # 评审自身异常 → 旁路放行到审批（无法判定 ≠ 不合格）
+        try:
+            verdict = await self._evaluate(plan)
+        except Exception:
+            logger.warning("report_quality: 评审异常（旁路放行到审批）", exc_info=True)
+            return None
+
+        _cache_verdict(thread_id, plan, verdict)
+
+        if self._should_block(verdict) and round_no <= _MAX_REWRITES:
+            # 拦截：不进入审批，批评回流让模型重写
+            self._record(verdict, target, thread_id,
+                         "blocked_before_approval", round_no)
+            return {
+                "messages": [ToolMessage(
+                    content=self._build_critique(verdict, round_no),
+                    tool_call_id=str(target.get("id") or ""),
+                    status="error",
+                )],
+                "jump_to": "model",
+            }
+
+        # 达标，或轮次耗尽后带备注放行——统一交给后续 HITL 审批
+        action = "passed_with_note" if self._should_block(verdict) else "recorded"
+        self._record(verdict, target, thread_id, action, round_no)
+        return None
+
     async def awrap_tool_call(
         self,
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command]],
     ) -> ToolMessage | Command:
+        """审批通过后的落盘阶段：不再评审，只给轮次耗尽的清单补质量备注。"""
         tc = request.tool_call
         name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "")
         if name != "replenish_submit":
             return await handler(request)
 
-        # thread_id：与 tool_call_metrics 同源（指标归组键）
+        result = await handler(request)
+        if not isinstance(result, ToolMessage):
+            return result
+
         try:
-            thread_id = request.runtime.config["configurable"]["thread_id"]
+            thread_id = str(
+                request.runtime.config["configurable"]["thread_id"]
+            )
         except Exception:
             thread_id = "unknown"
 
-        plan = (tc.get("args") or {}).get("replenishment_plan") or [] \
-            if isinstance(tc, dict) else []
-        tc_id = tc.get("id", "") if isinstance(tc, dict) else ""
-
-        # 评审（A1 记录 + A2 决策）。评审自身异常 → 旁路放行（旁路纪律）
-        try:
-            verdict = await self._evaluate(plan)
-            round_no = self._count_rewrite_rounds(request.state) + 1
-
-            if self._should_block(verdict) and round_no <= _MAX_REWRITES:
-                # A2 拦截：批评回流，不执行 handler（不存档）
-                self._record(verdict, tc if isinstance(tc, dict) else {},
-                             thread_id, "blocked_rewrite", round_no)
-                critique = self._build_critique(verdict, round_no)
-                return ToolMessage(content=critique, tool_call_id=tc_id,
-                                   status="error")
-
-            action = "recorded"
-            note = ""
-            if self._should_block(verdict):
-                # 轮次耗尽：带着批评意见放行（不阻断交付）
-                action = "passed_with_note"
-                note = (f"\n\n【质量备注】清单已存档，但未达评审及格线"
-                        f"（语义 {verdict['llm_avg']}/10，及格线 {self.pass_line}；"
-                        f"已重写 {_MAX_REWRITES} 轮）。评审意见见上，"
-                        f"建议人工复核本清单。")
-            self._record(verdict, tc if isinstance(tc, dict) else {},
-                         thread_id, action, round_no)
-
-            result = await handler(request)
-            if note and isinstance(result, ToolMessage):
-                result = result.model_copy(
-                    update={"content": str(result.content) + note})
-            return result
-        except Exception:
-            logger.warning("report_quality: 评审异常（旁路放行）", exc_info=True)
-            return await handler(request)
+        plan = ((tc.get("args") or {}) if isinstance(tc, dict) else {}).get(
+            "replenishment_plan") or []
+        verdict = _cached_verdict(thread_id, plan)
+        if verdict is not None and self._should_block(verdict):
+            result = result.model_copy(
+                update={"content": str(result.content) + self._build_note(verdict)}
+            )
+        return result

@@ -19,6 +19,7 @@ from typing import Any
 
 import yaml
 from deepagents import create_deep_agent
+from langchain.agents.middleware import HumanInTheLoopMiddleware
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -154,6 +155,16 @@ def _load_replenish_tools_sync():
 _config = _load_replenish_config()
 _tools = _load_replenish_tools_sync()
 
+# HITL 由本图显式挂载（不再通过 create_deep_agent(interrupt_on=...)）：
+# LangGraph 的 after_model 链按中间件列表**反向**执行，把 HITL 放在
+# ReportQuality 之前，质量门禁才会先于审批中断运行——用户看到的是
+# 已过质量门的清单，approve 后直接落盘。
+_interrupt_on = _config.get("interrupt_on") or {}
+_hitl_middleware = (
+    [HumanInTheLoopMiddleware(interrupt_on=_interrupt_on)]
+    if _interrupt_on else []
+)
+
 agent = create_deep_agent(
     model=MAIN_MODEL,
     system_prompt=_config["system_prompt"],
@@ -162,8 +173,10 @@ agent = create_deep_agent(
     memory=[AGENTS_MD_FILENAME],
     # 中间件栈（first=outermost：请求从列表头往尾流，结果从尾往头回流）：
     # - ToolMetrics：指标采集（最外层，记录所有工具调用成败与耗时）
-    # - ReportQuality（loop 改造 A1/A2）：approve 后存档前评审清单，
-    #   不达标拦截重写（评审代码与离线 judge_report.py 同源）。
+    # - HumanInTheLoop：审批中断。必须排在 ReportQuality 之前——after_model
+    #   反向执行，排在后面的 ReportQuality 才会先跑
+    # - ReportQuality（loop 改造 A1/A2）：生成后、展示前评审清单，
+    #   不达标则批评回流重写；达标才放行到审批。
     #   必须在 RetryGuidance 之外——它的批评也是 status="error" 的
     #   ToolMessage，若流经 RetryGuidance 会被误加"错误处理指引"，
     #   污染重写循环的轮次语义
@@ -174,6 +187,7 @@ agent = create_deep_agent(
     # - ImageGuard：图片内容防护（修复方向C坑3：图片回传纯文本模型会 400）
     middleware=[
         ToolMetricsMiddleware(),
+        *_hitl_middleware,
         ReportQualityMiddleware(),
         RetryGuidanceMiddleware(),
         ToolErrorMiddleware(),
@@ -182,9 +196,7 @@ agent = create_deep_agent(
     ],
     backend=_backend_factory,
     checkpointer=None,
-    # HITL：补货清单提交前人工审批。
-    # 注意（与同步子 Agent 的差异）：异步图的 interrupt_on 不会从主图传递，
-    # 必须在远端图自身配置；中断发生在本进程，run 状态转为 interrupted。
-    interrupt_on=_config.get("interrupt_on"),
+    # 注意：HITL 已在上面显式挂载，这里不能再传 interrupt_on，
+    # 否则框架会在列表末尾追加第二个 HITL，抢在质量门禁之前中断。
     name="procurement_replenish_async",
 )
