@@ -33,6 +33,17 @@ class FakeStore:
     def __init__(self):
         self.records: dict[tuple[str, str], dict] = {}
         self.retries: list[tuple[str, str, str]] = []
+        self.approval_claims: set[tuple[str, str]] = set()
+
+    async def claim_approval(self, task_id: str, interrupt_key: str, decision: str) -> bool:
+        key = (task_id, interrupt_key)
+        if key in self.approval_claims:
+            return False
+        self.approval_claims.add(key)
+        return True
+
+    async def release_approval(self, task_id: str, interrupt_key: str) -> None:
+        self.approval_claims.discard((task_id, interrupt_key))
 
     def put(self, kind: str, entity_id: str, **values):
         self.records[(kind, entity_id)] = values
@@ -113,10 +124,13 @@ def _record(task_id="task-1"):
     }
 
 
-def _interrupt_state():
+def _interrupt_state(interrupt_id: str = "intr-1"):
     return {
         "values": {},
-        "tasks": [{"interrupts": [{"value": {"action_requests": [{"name": "replenish_submit"}]}}]}],
+        "tasks": [{"interrupts": [{
+            "id": interrupt_id,
+            "value": {"action_requests": [{"name": "replenish_submit"}]},
+        }]}],
     }
 
 
@@ -242,6 +256,40 @@ async def test_resume_after_2024_restart_uses_registered_graph():
     print("[OK] 2024 丢失 run 后仍可恢复审批")
 
 
+async def test_duplicate_approval_blocked_by_idempotency_key():
+    """同一中断二次批准被幂等键拦截；发起失败时释放占位可重试。"""
+    store = FakeStore()
+    store.put("async", "task-1", **_record())
+    client = FakeClient(runs_list=[], state=_interrupt_state())
+    tool = create_resume_async_task_tool()
+    with patch("agent.tools.resume_async_task.recovery_store", store), patch(
+        "agent.tools.resume_async_task.get_client", return_value=client
+    ):
+        first = await tool.ainvoke({"task_id": "task-1", "decision": "approve"})
+        # 模拟并发/双击：第一次 resume run 还没消费中断，第二次看到同样的中断
+        second = await tool.ainvoke({"task_id": "task-1", "decision": "approve"})
+    assert "已传达审批决定" in first, first
+    assert "已提交过" in second and "不会重复恢复" in second, second
+    assert len(client.runs.create_calls) == 1, client.runs.create_calls
+    assert store.approval_claims == {("task-1", "intr-1")}
+
+    # 发起失败（2024 不可达）→ 释放占位，用户可对同一中断重试
+    store.put("async", "task-2", **_record("task-2"))
+    broken = FakeClient(runs_list=[], state=_interrupt_state("intr-2"))
+
+    async def _create_fails(**kwargs):
+        raise RuntimeError("2024 unreachable")
+
+    broken.runs.create = _create_fails
+    with patch("agent.tools.resume_async_task.recovery_store", store), patch(
+        "agent.tools.resume_async_task.get_client", return_value=broken
+    ):
+        failed = await tool.ainvoke({"task_id": "task-2", "decision": "approve"})
+    assert "恢复失败" in failed, failed
+    assert store.approval_claims == {("task-1", "intr-1")}
+    print("[OK] 重复批准被幂等键拦截；发起失败释放占位")
+
+
 async def main():
     await test_main_recovery_uses_recovery_mode()
     await test_async_resume_from_checkpoint()
@@ -250,6 +298,7 @@ async def main():
     await test_async_interrupt_waits_for_user()
     await test_start_tool_is_registered()
     await test_resume_after_2024_restart_uses_registered_graph()
+    await test_duplicate_approval_blocked_by_idempotency_key()
     print("ALL_OK")
 
 

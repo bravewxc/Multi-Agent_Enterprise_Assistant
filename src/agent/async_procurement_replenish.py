@@ -20,6 +20,7 @@ from typing import Any
 import yaml
 from deepagents import create_deep_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -75,12 +76,16 @@ def create_replenish_submit_tool(sandbox_backend):
     """
 
     @tool
-    async def replenish_submit(replenishment_plan: list, remark: str = "") -> str:
+    async def replenish_submit(
+        replenishment_plan: list,
+        remark: str = "",
+        config: RunnableConfig = None,  # type: ignore[assignment]
+    ) -> str:
         """
         提交补货建议清单。
 
         执行前会暂停等待用户批准（approve）或拒绝（reject）：
-        - 批准：清单写入沙箱 /analysis/approved_replenishment_{时间戳}.json 存档
+        - 批准：清单写入沙箱 /analysis/approved_replenishment_{task}_{时间戳}.json 存档
         - 拒绝：不写入，返回拒绝说明
 
         Args:
@@ -89,8 +94,18 @@ def create_replenish_submit_tool(sandbox_backend):
                 estimatedAmount / supplierId / urgency / abcClass / reason
             remark: 备注说明（如预算约束、特殊要求）
         """
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        archive_path = f"/analysis/approved_replenishment_{ts}.json"
+        # 存档名带 task_id + 微秒：不同任务同一秒批准不再互相覆盖；
+        # 同一任务即使重复执行也不会覆盖上一份存档（审批本身另有幂等键）。
+        task_id = "unknown"
+        try:
+            task_id = str(
+                ((config or {}).get("configurable") or {}).get("thread_id") or "unknown"
+            )
+        except Exception:
+            pass
+        safe_task = "".join(c for c in task_id if c.isalnum())[:8] or "unknown"
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        archive_path = f"/analysis/approved_replenishment_{safe_task}_{ts}.json"
         payload = {
             "submitted_at": datetime.now().isoformat(),
             "remark": remark,

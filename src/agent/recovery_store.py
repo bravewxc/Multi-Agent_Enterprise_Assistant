@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pymongo import MongoClient, ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from agent.env_utils import MONGODB_URI
 
@@ -27,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 OWNER_ID = uuid.uuid4().hex
 MAX_RECOVERY_ATTEMPTS = int(os.getenv("RECOVERY_MAX_ATTEMPTS", "3"))
+# 审批占位租约：远大于一次 runs.create 的耗时，又能让崩溃遗留的占位在
+# 两分钟内可被接管（否则该中断会永远返回"已提交过"）。
+APPROVAL_LEASE_SECONDS = int(os.getenv("APPROVAL_LEASE_SECONDS", "90"))
 TERMINAL_STATUSES = {"succeeded", "success", "interrupted", "failed", "error", "cancelled"}
 
 
@@ -41,12 +45,20 @@ class RecoveryStore:
         self.mongo_uri = mongo_uri
         self._client: MongoClient | None = None
         self._collection: Any = None
+        self._approval_collection: Any = None
 
     def _col(self):
         if self._collection is None:
             self._client = MongoClient(self.mongo_uri, serverSelectionTimeoutMS=3000)
             self._collection = self._client["langchain_db"]["recovery_runs"]
         return self._collection
+
+    def _approvals(self):
+        if self._approval_collection is None:
+            if self._client is None:
+                self._client = MongoClient(self.mongo_uri, serverSelectionTimeoutMS=3000)
+            self._approval_collection = self._client["langchain_db"]["approval_decisions"]
+        return self._approval_collection
 
     @staticmethod
     def _id(kind: str, entity_id: str) -> str:
@@ -203,11 +215,71 @@ class RecoveryStore:
             logger.warning("recovery: 认领失败 %s/%s", kind, entity_id, exc_info=True)
             return None
 
+    async def claim_approval(
+        self, task_id: str, interrupt_key: str, decision: str
+    ) -> bool:
+        """原子占用一次审批决策（幂等键 = task_id + interrupt id）。
+
+        Mongo 唯一主键做 compare-and-set：并发双击/多窗口重复批准时，
+        只有第一个 insert 成功，其余返回 False。返回 False 表示该中断
+        的审批已被提交过，调用方应直接返回"重复提交"而不再建 run。
+
+        占位带 APPROVAL_LEASE_SECONDS 租约：进程在"占位成功、run 还没
+        建出来"之间崩溃时，过期占位可被接管，避免该中断永远无法审批。
+
+        Mongo 不可用时降级放行（返回 True）：框架消费中断仍是第二道防重，
+        不能让存储故障阻断审批链路。
+        """
+        key = f"{task_id}:{interrupt_key}"
+        doc = {
+            "_id": key,
+            "task_id": task_id,
+            "interrupt_key": interrupt_key,
+            "decision": decision,
+            "owner_id": OWNER_ID,
+            "claimed_at": _utcnow(),
+        }
+        try:
+            await asyncio.to_thread(self._approvals().insert_one, doc)
+            return True
+        except DuplicateKeyError:
+            pass
+        except Exception:
+            logger.warning("recovery: 审批幂等登记失败，降级放行 task=%s",
+                           task_id, exc_info=True)
+            return True
+
+        # 已有占位：只有确认是崩溃遗留的过期占位才允许接管
+        try:
+            stale_before = _utcnow() - timedelta(seconds=APPROVAL_LEASE_SECONDS)
+            taken = await asyncio.to_thread(
+                self._approvals().find_one_and_update,
+                {"_id": key, "claimed_at": {"$lt": stale_before}},
+                {"$set": {"claimed_at": _utcnow(), "decision": decision,
+                          "owner_id": OWNER_ID}},
+                return_document=ReturnDocument.AFTER,
+            )
+            return taken is not None
+        except Exception:
+            logger.warning("recovery: 审批占位接管失败 task=%s", task_id, exc_info=True)
+            return False
+
+    async def release_approval(self, task_id: str, interrupt_key: str) -> None:
+        """审批发起失败时释放占位，让用户可以重试同一中断。"""
+        try:
+            await asyncio.to_thread(
+                self._approvals().delete_one,
+                {"_id": f"{task_id}:{interrupt_key}"},
+            )
+        except Exception:
+            logger.warning("recovery: 释放审批占位失败 task=%s", task_id, exc_info=True)
+
     def close(self) -> None:
         if self._client is not None:
             self._client.close()
         self._client = None
         self._collection = None
+        self._approval_collection = None
 
     async def schedule_retry(self, kind: str, entity_id: str, error: str) -> None:
         record = await self.get(kind, entity_id)

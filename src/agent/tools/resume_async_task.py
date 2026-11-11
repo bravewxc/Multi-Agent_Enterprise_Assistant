@@ -8,8 +8,11 @@ interrupted 后，需要通过 langgraph_sdk 的 runs.create(command={"resume": 
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
+from typing import Any
 
 from langchain_core.tools import tool
 from langgraph_sdk import get_client
@@ -24,6 +27,25 @@ ASYNC_AGENT_PROTOCOL_URL = os.environ.get(
 )
 
 _VALID_DECISIONS = ("approve", "reject")
+
+
+def _interrupt_key(interrupt: Any) -> str | None:
+    """审批幂等键：优先取框架分配的 interrupt id。
+
+    id 是挂起中断的稳定标识，同一中断重复批准时不变；老版本 SDK 的
+    中断载荷可能没有 id，退化为 action_requests 载荷指纹（同一份
+    待审批内容 = 同一次审批）。
+    """
+    if isinstance(interrupt, dict):
+        iid, value = interrupt.get("id"), interrupt.get("value")
+    else:
+        iid, value = getattr(interrupt, "id", None), getattr(interrupt, "value", None)
+    if iid:
+        return str(iid)
+    if value is None:
+        return None
+    raw = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    return "payload:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def create_resume_async_task_tool():
@@ -41,6 +63,9 @@ def create_resume_async_task_tool():
           （如"总额超预算，砍到 1 万以内"），必须把理由原样传入 reason——
           理由会传达给任务，它会按理由修订清单并重新提交审批，
           形成"拒绝 → 修订 → 再审批"的协商循环（同一任务最多协商 3 轮）。
+
+        同一中断的重复批准（双击/多窗口并发）只会生效一次，重复调用返回
+        "已提交过"提示，不会重复执行。
 
         Args:
             task_id: 中断任务的完整 task_id（即 check_async_task 返回的 thread_id）
@@ -65,6 +90,7 @@ def create_resume_async_task_tool():
             )
 
         client = get_client(url=ASYNC_AGENT_PROTOCOL_URL)
+        claimed_key: str | None = None
         try:
             # 从该 thread 最近一次 run 取 assistant_id（即当初启动的图），
             # 恢复必须用同一个 assistant 发起
@@ -89,18 +115,33 @@ def create_resume_async_task_tool():
             # tasks[].interrupts 里（HumanInTheLoopMiddleware 挂起的 action_requests）
             state = await client.threads.get_state(task_id)
             has_interrupt = False
+            interrupt_key: str | None = None
             tasks = state.get("tasks") if isinstance(state, dict) else getattr(state, "tasks", None)
             for t in tasks or []:
                 for interrupt in (t.get("interrupts") if isinstance(t, dict) else getattr(t, "interrupts", None)) or []:
                     value = interrupt.get("value") if isinstance(interrupt, dict) else getattr(interrupt, "value", None)
                     if isinstance(value, dict) and "action_requests" in value:
                         has_interrupt = True
+                        if interrupt_key is None:
+                            interrupt_key = _interrupt_key(interrupt)
             if not has_interrupt:
                 status = str((runs[0] if runs else {}).get("status", "unknown"))
                 return (
                     f"任务 {task_id} 当前没有等待审批的中断（run 状态 {status}），"
                     f"无需恢复。只有提交了清单等待审批的任务才能 resume。"
                 )
+
+            # 审批幂等：以 interrupt id 为键原子占位。并发双击/多窗口重复
+            # 批准时只有一个请求能占位成功，其余直接返回，不再建第二个
+            # resume run（框架消费中断只是兜底，存在竞态窗口）。
+            interrupt_key = interrupt_key or "task"
+            if not await recovery_store.claim_approval(task_id, interrupt_key, decision):
+                return (
+                    f"提示：该审批已提交过（幂等键 {interrupt_key[:8]}），"
+                    f"本次重复提交未执行，任务 {task_id} 不会重复恢复。"
+                    f"请用 check_async_task 查询最新状态。"
+                )
+            claimed_key = interrupt_key
 
             # reject + reason：理由经框架 RejectDecision.message 透传给图内模型
             # （langchain HumanInTheLoopMiddleware._process_decision 会把 message
@@ -117,6 +158,9 @@ def create_resume_async_task_tool():
                 "async", task_id, "running", run_id=run.get("run_id")
             )
         except Exception as e:
+            # 占位后发起失败（如 2024 不可达）：释放幂等键，允许用户重试同一中断
+            if claimed_key is not None:
+                await recovery_store.release_approval(task_id, claimed_key)
             logger.warning("Failed to resume async task %s: %s", task_id, e)
             return f"恢复失败：{e}"
 
